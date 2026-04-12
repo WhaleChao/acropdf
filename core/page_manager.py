@@ -10,7 +10,7 @@ class PageManager:
         return self._doc.fitz_doc
 
     def _ensure_doc(self) -> fitz.Document:
-        if not self._fitz:
+        if self._fitz is None:
             raise RuntimeError("尚未載入文件")
         return self._fitz
 
@@ -33,11 +33,11 @@ class PageManager:
         self._doc._mark_modified()
         self._doc.page_count_changed.emit(doc.page_count)
 
-    def insert_blank(self, after_index: int, width: float = 595, height: float = 842):
-        """在 after_index 之後插入空白頁（A4 預設）"""
+    def insert_blank(self, at: int, width: float = 595, height: float = 842):
+        """在 at 位置插入空白頁（0 = 第一頁之前，A4 預設）"""
         doc = self._ensure_doc()
         self._doc.begin_op("插入空白頁")
-        insert_at = max(0, min(after_index + 1, doc.page_count))
+        insert_at = max(0, min(at, doc.page_count))
         doc.new_page(pno=insert_at, width=width, height=height)
         self._doc.end_op()
         self._doc._mark_modified()
@@ -120,14 +120,23 @@ class PageManager:
         for i in indices:
             page = doc[i]
             r = page.rect
-            page.insert_text(
-                fitz.Point(r.width * 0.1, r.height * 0.5),
+            # 使用 Shape 繪製旋轉浮水印（insert_text 不支援 45° 旋轉）
+            shape = page.new_shape()
+            # 中心點旋轉 45°
+            import math
+            cx, cy = r.width / 2, r.height / 2
+            morph = (fitz.Point(cx, cy), fitz.Matrix(math.cos(math.radians(45)),
+                     math.sin(math.radians(45)),
+                     -math.sin(math.radians(45)),
+                     math.cos(math.radians(45)), 0, 0))
+            shape.insert_text(
+                fitz.Point(cx - len(text) * fontsize * 0.25, cy),
                 text,
                 fontsize=fontsize,
-                rotate=45,
                 color=color,
-                overlay=True,
+                morph=morph,
             )
+            shape.commit(overlay=True)
         self._doc.end_op()
         self._doc._mark_modified()
 

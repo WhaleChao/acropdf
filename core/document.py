@@ -77,7 +77,7 @@ class PDFDocument(QObject):
 
     # ── 存檔 ─────────────────────────────────────────────────────
     def save(self, path: str | None = None, incremental: bool = False) -> bool:
-        if not self._fitz_doc:
+        if self._fitz_doc is None:
             return False
         out = os.path.abspath(path or self._path or "")
         if not out:
@@ -196,7 +196,7 @@ class PDFDocument(QObject):
 
     def _snapshot(self) -> bytes:
         """序列化目前文件為 bytes。"""
-        if not self._fitz_doc:
+        if self._fitz_doc is None:
             return b""
         buf = io.BytesIO()
         self._fitz_doc.save(buf, garbage=0, deflate=False)
@@ -216,7 +216,7 @@ class PDFDocument(QObject):
         pass
 
     def undo(self) -> bool:
-        if not self._fitz_doc or not self._undo_stack:
+        if self._fitz_doc is None or not self._undo_stack:
             return False
         try:
             # 儲存目前狀態到 redo
@@ -232,7 +232,7 @@ class PDFDocument(QObject):
             return False
 
     def redo(self) -> bool:
-        if not self._fitz_doc or not self._redo_stack:
+        if self._fitz_doc is None or not self._redo_stack:
             return False
         try:
             self._undo_stack.append(self._snapshot())

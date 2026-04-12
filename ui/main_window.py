@@ -283,6 +283,10 @@ class MainWindow(QMainWindow):
         self._thumbnail_panel.load_document(doc)
         self._bookmark_panel.load_document(doc)
 
+        # 頁面結構變更時刷新側邊面板與狀態列
+        doc.page_count_changed.connect(lambda count: self._on_page_count_changed(doc, count))
+        doc.document_modified.connect(lambda: self._on_doc_modified(doc))
+
     def _close_tab(self, index: int):
         doc = self._docs[index] if index < len(self._docs) else None
         if doc and doc.is_modified:
@@ -500,7 +504,7 @@ class MainWindow(QMainWindow):
         doc = self._current_doc()
         view = self._current_view()
         if doc and view:
-            doc.pages.insert_blank(view.current_page())
+            doc.pages.insert_blank(view.current_page() + 1)
 
     def _extract_pages(self):
         doc = self._current_doc()
@@ -576,6 +580,22 @@ class MainWindow(QMainWindow):
         self._zoom_combo.blockSignals(True)
         self._zoom_combo.setCurrentText(pct)
         self._zoom_combo.blockSignals(False)
+
+    def _on_page_count_changed(self, doc: PDFDocument, count: int):
+        """頁面數量變更（插入/刪除/合併）→ 刷新縮圖、書籤、狀態列"""
+        if self._current_doc() is not doc:
+            return
+        self._thumbnail_panel.load_document(doc)
+        self._bookmark_panel.load_document(doc)
+        view = self._current_view()
+        cur = view.current_page() if view else 0
+        self._page_label.setText(f"第 {cur+1} 頁，共 {count} 頁")
+
+    def _on_doc_modified(self, doc: PDFDocument):
+        """文件內容修改（標注/旋轉/浮水印等）→ 刷新縮圖"""
+        if self._current_doc() is not doc:
+            return
+        self._thumbnail_panel.load_document(doc)
 
     def _on_zoom_combo_activated(self, index: int):
         """使用者從下拉選單選擇項目。"""

@@ -147,6 +147,14 @@ class AnnotationManager:
         self._doc._mark_modified()
         return annot
 
+    # 線條端點符號映射（相容 PyMuPDF 1.24+）
+    _LE_MAP = {
+        "None": 0,   # PDF_ANNOT_LE_NONE
+        "Square": 1, "Circle": 2, "Diamond": 3,
+        "OpenArrow": 4, "ClosedArrow": 5,
+        "Butt": 6, "ROpenArrow": 7, "RClosedArrow": 8, "Slash": 9,
+    }
+
     def add_line(self, page_num: int, p1: fitz.Point, p2: fitz.Point,
                  color: tuple = (0, 0, 0), width: float = 1.5,
                  start_symbol: str = "None", end_symbol: str = "None"):
@@ -155,7 +163,12 @@ class AnnotationManager:
         annot = page.add_line_annot(p1, p2)
         annot.set_colors(stroke=color)
         annot.set_border(width=width)
-        annot.set_line_ends(start_symbol, end_symbol)
+        le_start = self._LE_MAP.get(start_symbol, 0)
+        le_end = self._LE_MAP.get(end_symbol, 0)
+        try:
+            annot.set_line_ends(le_start, le_end)
+        except (TypeError, Exception):
+            pass  # 舊版 PyMuPDF 或不支援：略過端點設定
         annot.update()
         self._doc.end_op()
         self._doc._mark_modified()

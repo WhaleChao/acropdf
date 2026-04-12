@@ -42,7 +42,7 @@ class SecurityManager:
         return self._fitz.needs_pass if self._fitz else False
 
     def get_permissions(self) -> dict:
-        if not self._fitz:
+        if self._fitz is None:
             return {}
         p = self._fitz.permissions
         return {

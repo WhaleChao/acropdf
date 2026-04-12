@@ -140,6 +140,10 @@ class OCRDialog(QDialog):
             return range(frm, min(to, self._doc.page_count))
 
     def _run_ocr(self):
+        if not self._doc.path:
+            QMessageBox.warning(self, "提示", "請先儲存文件後再執行 OCR")
+            return
+
         out_path, _ = QFileDialog.getSaveFileName(
             self, "儲存 OCR 結果", "", "PDF 檔案 (*.pdf)"
         )

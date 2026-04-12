@@ -130,6 +130,12 @@ class PDFView(QScrollArea):
         self._cache.invalidate()
         self._rebuild_pages()
 
+    def refresh(self):
+        """強制重新渲染所有可見頁面（供外部呼叫）。"""
+        self._pending_signals.clear()
+        self._cache.invalidate()
+        self._rebuild_pages()
+
     # ── 公開控制 ─────────────────────────────────────────────────
     def set_zoom(self, zoom: float):
         self._zoom = max(0.1, min(zoom, 8.0))
