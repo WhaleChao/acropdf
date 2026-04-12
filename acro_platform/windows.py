@@ -142,6 +142,58 @@ $bitmap.Dispose()
         finally:
             os.unlink(tmp_png.name)
 
+    def ocr_image_path(self, image_path: str, lang: str = "chi_tra+eng") -> str:
+        """
+        OCR 指定 PNG/JPG，回傳文字字串（供 auto_label_engine 使用）。
+        重用 ocr_page 的 PowerShell 邏輯，但不需要 fitz.Page，直接回傳文字。
+        """
+        import subprocess, json, os
+
+        lang_map = {
+            "chi_tra": "zh-Hant-TW", "chi_sim": "zh-Hans-CN",
+            "eng": "en-US", "jpn": "ja-JP",
+        }
+        first_lang = lang.split("+")[0].strip()
+        win_lang = lang_map.get(first_lang, "en-US")
+        img_path_fwd = image_path.replace("\\", "/")
+
+        ps_script = f'''
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Media.Ocr.OcrEngine,Windows.Foundation,ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap,Windows.Foundation,ContentType=WindowsRuntime]
+
+function Await($WinRtTask) {{
+    $asTask = [System.WindowsRuntimeSystemExtensions]::AsTask($WinRtTask)
+    $asTask.Wait()
+    return $asTask.Result
+}}
+
+$lang = [Windows.Globalization.Language]::new("{win_lang}")
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)
+if (-not $engine) {{ $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }}
+
+$file = [System.IO.File]::OpenRead("{img_path_fwd}")
+$memStream = [Windows.Storage.Streams.InMemoryRandomAccessStream]::new()
+[System.IO.WindowsRuntimeStreamExtensions]::CopyToAsync($file, $memStream).Wait()
+$file.Close(); $memStream.Seek(0)
+
+$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($memStream))
+$bitmap  = Await ($decoder.GetSoftwareBitmapAsync())
+$result  = Await ($engine.RecognizeAsync($bitmap))
+
+$result.Lines | ForEach-Object {{ $_.Text }}
+$memStream.Dispose(); $bitmap.Dispose()
+'''
+        try:
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                capture_output=True, text=True, timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            return r.stdout.strip() if r.returncode == 0 else ""
+        except Exception:
+            return ""
+
     def supported_languages(self) -> list[str]:
         try:
             import subprocess

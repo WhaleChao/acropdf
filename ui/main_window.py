@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
         tools_menu = mb.addMenu("工具(&T)")
         self._add_action(tools_menu, "OCR 文字化...", self._ocr_dialog)
         self._add_action(tools_menu, "表單填寫...", self._form_fill_dialog)
+        self._add_action(tools_menu, "自動標籤...", self._auto_label_dialog)
         tools_menu.addSeparator()
         self._add_action(tools_menu, "比較文件...", self._compare_dialog)
         self._add_action(tools_menu, "最佳化 PDF...", self._optimize_dialog)
@@ -669,6 +670,17 @@ class MainWindow(QMainWindow):
         doc = self._current_doc()
         if doc:
             FormFillDialog(doc, self).exec()
+
+    def _auto_label_dialog(self):
+        from ui.dialogs.auto_label.auto_label_dialog import AutoLabelDialog
+        doc = self._current_doc()
+        if not doc:
+            return
+        dlg = AutoLabelDialog(doc, self)
+        if dlg.exec():
+            view = self._current_view()
+            if view:
+                view.refresh()
 
     def _apply_redactions(self):
         doc = self._current_doc()

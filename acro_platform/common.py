@@ -57,6 +57,17 @@ class TesseractOCR:
             pytesseract.pytesseract.tesseract_cmd = self._tess_cmd
         page.get_textpage_ocr(language=lang, dpi=dpi, full=True)
 
+    def ocr_image_path(self, image_path: str, lang: str = "chi_tra+eng") -> str:
+        """OCR 指定圖片，回傳文字字串（供 auto_label_engine 使用）。"""
+        try:
+            import pytesseract
+            from PIL import Image
+            if self._tess_cmd:
+                pytesseract.pytesseract.tesseract_cmd = self._tess_cmd
+            return pytesseract.image_to_string(Image.open(image_path), lang=lang)
+        except Exception:
+            return ""
+
     def supported_languages(self) -> list[str]:
         if not self._tess_cmd:
             return ["eng"]

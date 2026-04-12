@@ -79,6 +79,49 @@ class MacVisionOCR:
             except Exception:
                 pass
 
+    def ocr_image_path(self, image_path: str, lang: str = "chi_tra+eng") -> str:
+        """
+        OCR 指定 PNG/JPG 路徑，回傳辨識文字字串（供 auto_label_engine 使用）。
+        不寫入 PDF，純回傳文字。
+        """
+        try:
+            from Foundation import NSData
+            with open(image_path, "rb") as f:
+                png_bytes = f.read()
+
+            ns_data = NSData.dataWithBytes_length_(png_bytes, len(png_bytes))
+            ci_image = self._Quartz.CIImage.imageWithData_(ns_data)
+            handler = self._Vision.VNImageRequestHandler.alloc().initWithCIImage_options_(
+                ci_image, None
+            )
+            request = self._Vision.VNRecognizeTextRequest.alloc().init()
+            request.setRecognitionLevel_(self._Vision.VNRequestTextRecognitionLevelAccurate)
+
+            lang_map = {
+                "chi_tra": "zh-Hant", "chi_sim": "zh-Hans",
+                "eng": "en", "jpn": "ja",
+            }
+            vision_langs = [lang_map.get(l.strip(), l.strip()) for l in lang.split("+")]
+            request.setRecognitionLanguages_(vision_langs)
+            request.setUsesLanguageCorrection_(True)
+
+            success = handler.performRequests_error_([request], None)
+            if not success[0]:
+                return ""
+
+            results = request.results()
+            if not results:
+                return ""
+
+            lines = []
+            for obs in results:
+                cands = obs.topCandidates_(1)
+                if cands:
+                    lines.append(cands[0].string())
+            return "\n".join(lines)
+        except Exception:
+            return ""
+
     def supported_languages(self) -> list[str]:
         try:
             request = self._Vision.VNRecognizeTextRequest.alloc().init()
