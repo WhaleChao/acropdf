@@ -7,8 +7,20 @@ from PyQt6.QtWidgets import (
     QStatusBar, QLabel, QFileDialog, QMessageBox,
     QInputDialog, QWidget, QMenu
 )
+from pathlib import Path
 from PyQt6.QtCore import Qt, QPoint, QSize
-from PyQt6.QtGui import QAction, QKeySequence, QShortcut
+from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QIcon
+
+
+def _load_window_icon() -> "QIcon | None":
+    base = Path(__file__).parent.parent / "resources" / "icons"
+    for name in ("acropdf.icns", "acropdf.ico", "acropdf_1024.png"):
+        p = base / name
+        if p.exists():
+            icon = QIcon(str(p))
+            if not icon.isNull():
+                return icon
+    return None
 
 from core.document import PDFDocument
 from ui.viewer.pdf_view import PDFView
@@ -23,6 +35,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("AcroPDF")
         self.resize(1280, 900)
+        # 視窗圖示（Windows / Linux 標題欄；macOS 用 app-level icon）
+        _icon = _load_window_icon()
+        if _icon:
+            self.setWindowIcon(_icon)
         self._config = Config()
         self._docs: list[PDFDocument] = []
         self._tool_actions: dict[ToolMode, QAction] = {}

@@ -35,6 +35,9 @@ def main():
     app.setOrganizationName("YourOffice")
     app.setApplicationVersion(APP_VERSION)
 
+    # 應用程式圖示
+    _set_app_icon(app)
+
     # 載入樣式表
     _load_stylesheet(app)
 
@@ -100,6 +103,21 @@ def _load_stylesheet(app: QApplication):
     if os.path.isfile(qss_path):
         with open(qss_path, encoding="utf-8") as f:
             app.setStyleSheet(f.read())
+
+
+def _set_app_icon(app: QApplication):
+    """設定應用程式圖示（Dock、工作列、視窗標題欄）。"""
+    base = Path(__file__).parent / "resources" / "icons"
+    # 優先使用平台原生格式
+    if sys.platform == "darwin":
+        icon_path = base / "acropdf.icns"
+    else:
+        icon_path = base / "acropdf.ico"
+    # fallback 到 PNG
+    if not icon_path.exists():
+        icon_path = base / "acropdf_1024.png"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
 
 def _cleanup_temp_files():
