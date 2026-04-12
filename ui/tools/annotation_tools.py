@@ -57,17 +57,89 @@ class StickyNoteTool(BaseTool):
 
 
 class TextBoxTool(BaseTool):
+    """拖曳選框定義文字框位置，自動偵測周圍字體大小。"""
+
+    def __init__(self, mode, view, doc):
+        super().__init__(mode, view, doc)
+        self._overlay: QRect | None = None
+
+    def mouse_press(self, widget, event, pos: QPoint):
+        super().mouse_press(widget, event, pos)
+        self._overlay = None
+
+    def mouse_move(self, widget, event, pos: QPoint):
+        if self._start:
+            self._overlay = _normalized_rect(self._start, pos)
+            widget.update()
+
     def mouse_release(self, widget, event, pos: QPoint):
         if event.button() != Qt.MouseButton.LeftButton or not self._start:
             return
-        rect = self._pdf_rect(widget, self._start, pos)
-        if rect.width < 10 or rect.height < 10:
+        rect_w = _normalized_rect(self._start, pos)
+        self._overlay = None
+        widget.update()
+
+        if rect_w.width() < 10 or rect_w.height() < 10:
             self._start = None
             return
-        text, ok = QInputDialog.getMultiLineText(widget, "新增文字框", "內容：")
-        if ok and text.strip():
-            self.doc.annotations.add_freetext(widget.page_num, rect, text.strip())
+
+        pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+
+        # 偵測周圍字體大小
+        detected_size = self._detect_font_size(widget.page_num, pdf_rect)
+
+        # 組合尺寸說明
+        rect_info = (
+            f"選取範圍：{pdf_rect.width:.0f} × {pdf_rect.height:.0f} pt  "
+            f"（第 {widget.page_num + 1} 頁）"
+        )
+
+        from ui.dialogs.text_box.text_box_dialog import TextBoxDialog
+        dlg = TextBoxDialog(font_size=detected_size, rect_info=rect_info,
+                            parent=widget)
+        if dlg.exec():
+            text, size = dlg.get_result()
+            if text.strip():
+                self.doc.annotations.add_freetext(
+                    widget.page_num, pdf_rect, text.strip(), fontsize=float(size)
+                )
         self._start = None
+
+    def _detect_font_size(self, page_num: int, rect: fitz.Rect) -> float:
+        """從頁面已有文字偵測主要字體大小，作為新文字框的預設值。"""
+        try:
+            page = self.doc.fitz_doc[page_num]
+            # 向外擴展 60pt 搜尋附近文字
+            search_rect = rect + (-60, -60, 60, 60)
+            blocks = page.get_text("dict", clip=search_rect)["blocks"]
+            sizes: list[float] = []
+            for b in blocks:
+                if b.get("type") != 0:
+                    continue
+                for line in b.get("lines", []):
+                    for span in line.get("spans", []):
+                        s = span.get("size", 0)
+                        if s > 2:
+                            sizes.append(s)
+            if sizes:
+                from collections import Counter
+                # 以最常出現的整數字體大小為準
+                return float(Counter(round(s) for s in sizes).most_common(1)[0][0])
+        except Exception:
+            pass
+        return 12.0
+
+    def draw_overlay(self, widget, painter):
+        """橡皮筋框（綠色虛線）。"""
+        if not self._overlay:
+            return
+        from PyQt6.QtGui import QColor, QPen
+        painter.save()
+        pen = QPen(QColor(0, 170, 80), 2, Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(QColor(0, 170, 80, 25))
+        painter.drawRect(self._overlay)
+        painter.restore()
 
 
 class StampTool(BaseTool):

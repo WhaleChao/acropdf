@@ -53,7 +53,6 @@ class MainWindow(QMainWindow):
 
         self._left_tabs = QTabWidget()
         self._left_tabs.tabBar().setExpanding(False)   # 不撐滿，緊湊顯示
-        self._left_tabs.tabBar().setDocumentMode(True)  # 更平整的外觀
         self._left_tabs.setMaximumWidth(220)
         self._left_tabs.setMinimumWidth(180)
         self._thumbnail_panel = ThumbnailPanel()
@@ -63,6 +62,7 @@ class MainWindow(QMainWindow):
 
         self._doc_tabs = QTabWidget()
         self._doc_tabs.setTabsClosable(True)
+        self._doc_tabs.tabBar().setExpanding(False)   # 不撐滿，靠左排列
         self._doc_tabs.tabCloseRequested.connect(self._close_tab)
         self._doc_tabs.currentChanged.connect(self._on_tab_changed)
 
@@ -627,8 +627,10 @@ class MainWindow(QMainWindow):
     def _ocr_dialog(self):
         from ui.dialogs.ocr.ocr_dialog import OCRDialog
         doc = self._current_doc()
+        view = self._current_view()
         if doc:
-            OCRDialog(doc, self).exec()
+            cur_page = view.current_page() if view else 0
+            OCRDialog(doc, current_page=cur_page, parent=self).exec()
 
     def _compare_dialog(self):
         from ui.dialogs.compare.compare_dialog import CompareDialog

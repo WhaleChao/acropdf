@@ -13,6 +13,7 @@ QTreeWidget { background: #252525; color: #e8e8e8; border: 1px solid #444; }
 QTreeWidget::item:selected { background: #0078d4; color: white; }
 QTreeWidget::item:hover { background: #333; }
 QTabWidget::pane { border: 1px solid #444; background: #1e1e1e; }
+QTabWidget::tab-bar { alignment: left; }
 QTabBar::tab { padding: 6px 12px; background: #2d2d2d; color: #e8e8e8; border: 1px solid #444; }
 QTabBar::tab:selected { background: #1e1e1e; border-bottom: 2px solid #0078d4; color: white; }
 QTabBar::tab:hover { background: #383838; }

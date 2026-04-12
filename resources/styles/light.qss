@@ -11,6 +11,7 @@ QListWidget::item:selected { background: #0078d4; color: white; }
 QTreeWidget { background: #fafafa; color: #1a1a1a; border: 1px solid #ddd; }
 QTreeWidget::item:selected { background: #0078d4; color: white; }
 QTabWidget::pane { border: 1px solid #ccc; }
+QTabWidget::tab-bar { alignment: left; }
 QTabBar::tab { padding: 6px 12px; background: #e8e8e8; color: #1a1a1a; }
 QTabBar::tab:selected { background: white; border-bottom: 2px solid #0078d4; color: #1a1a1a; }
 QStatusBar { background: #e0e0e0; color: #333; }
