@@ -161,6 +161,73 @@ class AnnotationManager:
         self._doc._mark_modified()
         return annot
 
+    # ── 區塊底線 / 刪除線 ─────────────────────────────────────────
+    def add_area_underline(self, page_num: int, rect: fitz.Rect,
+                           color: tuple = (0, 0, 1)):
+        self._doc.begin_op("加底線")
+        page = self._fitz[page_num]
+        annot = page.add_underline_annot([rect])
+        annot.set_colors(stroke=color)
+        annot.update()
+        self._doc.end_op()
+        self._doc._mark_modified()
+        return annot
+
+    def add_area_strikeout(self, page_num: int, rect: fitz.Rect,
+                           color: tuple = (1, 0, 0)):
+        self._doc.begin_op("加刪除線")
+        page = self._fitz[page_num]
+        annot = page.add_strikeout_annot([rect])
+        annot.set_colors(stroke=color)
+        annot.update()
+        self._doc.end_op()
+        self._doc._mark_modified()
+        return annot
+
+    # ── 標注框（Callout）────────────────────────────────────────────
+    def add_callout(self, page_num: int, rect: fitz.Rect, text: str,
+                    fontsize: float = 11):
+        self._doc.begin_op("加標注框")
+        page = self._fitz[page_num]
+        # 指向點：矩形左上角外側
+        tip = fitz.Point(rect.x0 - 30, rect.y0 - 30)
+        knee = fitz.Point(rect.x0, rect.y0)
+        try:
+            annot = page.add_freetext_annot(
+                rect, text, fontsize=fontsize, fontname="helv",
+                text_color=(0, 0, 0), fill_color=(1, 1, 0.8),
+                callout=[tip, knee, fitz.Point(rect.x0, rect.y0 + 4)],
+            )
+        except TypeError:
+            # 舊版 PyMuPDF 不支援 callout 參數，退回普通文字框
+            annot = page.add_freetext_annot(
+                rect, text, fontsize=fontsize, fontname="helv",
+                text_color=(0, 0, 0), fill_color=(1, 1, 0.8),
+            )
+        annot.update()
+        self._doc.end_op()
+        self._doc._mark_modified()
+        return annot
+
+    # ── 連結（Link）──────────────────────────────────────────────────
+    def add_link(self, page_num: int, rect: fitz.Rect,
+                 uri: str = None, page_target: int = None):
+        self._doc.begin_op("加連結")
+        page = self._fitz[page_num]
+        if uri:
+            lnk = {"kind": fitz.LINK_URI, "from": rect, "uri": uri}
+        elif page_target is not None:
+            lnk = {
+                "kind": fitz.LINK_GOTO, "from": rect,
+                "page": page_target, "to": fitz.Point(0, 0), "zoom": 0,
+            }
+        else:
+            self._doc.end_op()
+            return None
+        page.insert_link(lnk)
+        self._doc.end_op()
+        self._doc._mark_modified()
+
     # ── 圖章 ─────────────────────────────────────────────────────
     BUILTIN_STAMPS = [
         "Approved", "AsIs", "Confidential", "Departmental", "Draft",

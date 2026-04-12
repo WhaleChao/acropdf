@@ -17,6 +17,7 @@ class PageWidget(QWidget):
         self._zoom = 1.0
         self._tool = None
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.setMouseTracking(True)   # 讓 mouseMoveEvent 在不按鍵時也觸發（測量工具需要）
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(
             lambda pos: self.context_requested.emit(self._page_num, self.mapToGlobal(pos))
@@ -54,7 +55,7 @@ class PageWidget(QWidget):
 
     def mousePressEvent(self, event):
         self.clicked.emit(self._page_num, event.pos())
-        if event.button() == Qt.MouseButton.LeftButton and self._tool:
+        if self._tool:
             self._tool.mouse_press(self, event, event.pos())
 
     def mouseMoveEvent(self, event):

@@ -81,3 +81,34 @@ class FormManager:
         data = {k: v for k, v in pairs}
         if data:
             self.fill_all(data)
+
+    # ── 新增欄位 ──────────────────────────────────────────────────
+    def add_field(self, page_num: int, rect: fitz.Rect,
+                  field_type: str, name: str, default_value: str = ""):
+        """
+        field_type: 'text' | 'checkbox' | 'combo' | 'list'
+        """
+        self._doc.begin_op("加表單欄位")
+        page = self._fitz[page_num]
+        widget = fitz.Widget()
+        widget.rect = rect
+        widget.field_name = name
+        _type_map = {
+            "text":     fitz.PDF_WIDGET_TYPE_TEXT,
+            "checkbox": fitz.PDF_WIDGET_TYPE_CHECKBOX,
+            "combo":    fitz.PDF_WIDGET_TYPE_COMBOBOX,
+            "list":     fitz.PDF_WIDGET_TYPE_LISTBOX,
+        }
+        widget.field_type = _type_map.get(field_type, fitz.PDF_WIDGET_TYPE_TEXT)
+        if field_type == "checkbox":
+            widget.field_value = bool(default_value)
+        else:
+            widget.field_value = default_value
+        widget.text_fontsize = 11
+        widget.text_color = (0, 0, 0)
+        widget.fill_color = (1, 1, 1)
+        widget.border_color = (0, 0, 0)
+        widget.border_width = 1
+        page.add_widget(widget)
+        self._doc.end_op()
+        self._doc._mark_modified()

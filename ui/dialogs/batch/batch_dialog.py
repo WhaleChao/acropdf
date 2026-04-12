@@ -1,4 +1,6 @@
 # ~/Desktop/acropdf/ui/dialogs/batch/batch_dialog.py
+import os
+
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFileDialog, QMessageBox,
@@ -104,11 +106,21 @@ class BatchDialog(QDialog):
         errors = []
         self._progress.setMaximum(total)
 
+        # 「合併」需要特殊處理（所有檔案合成一個輸出）
+        if op == "合併為單一 PDF":
+            try:
+                self._batch_merge(self._files, self._outdir_path)
+                QMessageBox.information(self, "完成", "合併完成！")
+            except Exception as e:
+                QMessageBox.critical(self, "失敗", f"合併失敗：{e}")
+            self.accept()
+            return
+
         for i, path in enumerate(self._files):
             try:
                 self._batch_one(path, op, self._outdir_path)
             except Exception as e:
-                errors.append(f"{path}: {e}")
+                errors.append(f"{os.path.basename(path)}: {e}")
             self._progress.setValue(i + 1)
 
         if errors:
@@ -121,28 +133,54 @@ class BatchDialog(QDialog):
         self.accept()
 
     def _batch_one(self, path: str, op: str, outdir: str):
-        import os, fitz
+        import os
+        import fitz
         name = os.path.splitext(os.path.basename(path))[0]
-        doc = fitz.open(path)
+
         if op == "OCR 辨識":
-            # placeholder — real OCR via ocr_engine
             out = os.path.join(outdir, name + "_ocr.pdf")
-            doc.save(out)
+            from core.ocr_engine import OCREngine
+            OCREngine.run_sync(path, out, lang="chi_tra+eng", dpi=300)
+
         elif op == "優化壓縮":
             out = os.path.join(outdir, name + "_opt.pdf")
-            doc.save(out, garbage=4, deflate=True)
+            doc = fitz.open(path)
+            doc.save(out, garbage=4, deflate=True, clean=True)
+            doc.close()
+
+        elif op == "加密保護":
+            out = os.path.join(outdir, name + "_enc.pdf")
+            doc = fitz.open(path)
+            perm = (fitz.PDF_PERM_PRINT | fitz.PDF_PERM_COPY)
+            doc.save(out, encryption=fitz.PDF_ENCRYPT_AES_256,
+                     owner_pw="owner123", user_pw="", permissions=perm,
+                     garbage=4)
+            doc.close()
+
         elif op == "匯出為圖片 (PNG)":
+            doc = fitz.open(path)
             for pi in range(doc.page_count):
                 pix = doc[pi].get_pixmap(dpi=150)
                 out = os.path.join(outdir, f"{name}_p{pi+1:04d}.png")
                 pix.save(out)
+            doc.close()
+
         elif op == "匯出為文字 (TXT)":
             out = os.path.join(outdir, name + ".txt")
+            doc = fitz.open(path)
             with open(out, "w", encoding="utf-8") as f:
                 for pi in range(doc.page_count):
                     f.write(doc[pi].get_text())
-        elif op == "合併為單一 PDF":
-            # handled after all files; just save as-is here
-            out = os.path.join(outdir, name + ".pdf")
-            doc.save(out)
-        doc.close()
+            doc.close()
+
+    def _batch_merge(self, files: list, outdir: str):
+        import os
+        import fitz
+        merged = fitz.open()
+        for path in files:
+            src = fitz.open(path)
+            merged.insert_pdf(src)
+            src.close()
+        out = os.path.join(outdir, "merged.pdf")
+        merged.save(out, garbage=4, deflate=True)
+        merged.close()

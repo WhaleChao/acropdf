@@ -57,6 +57,28 @@ class OCRWorker(QRunnable):
 
 class OCREngine:
     @staticmethod
+    def run_sync(input_path: str, output_path: str,
+                 lang: str = "chi_tra+eng", dpi: int = 300,
+                 page_range: range = None,
+                 on_progress=None) -> str:
+        """同步版本（供批次處理 / 無 Qt 事件迴圈的場合使用）。"""
+        from acro_platform import get_ocr_backend
+        backend = get_ocr_backend()
+        doc = fitz.open(input_path)
+        try:
+            pages = page_range if page_range is not None else range(doc.page_count)
+            total = len(pages)
+            for i, page_num in enumerate(pages):
+                backend.ocr_page(doc[page_num], lang, dpi)
+                if on_progress:
+                    on_progress(i + 1, total)
+            doc.save(output_path, garbage=4, deflate=True)
+        finally:
+            doc.close()
+        return output_path
+
+
+    @staticmethod
     def get_backend_name() -> str:
         """回傳當前平台會使用的 OCR 引擎名稱"""
         try:

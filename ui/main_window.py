@@ -125,9 +125,13 @@ class MainWindow(QMainWindow):
         # 工具
         tools_menu = mb.addMenu("工具(&T)")
         self._add_action(tools_menu, "OCR 文字化...", self._ocr_dialog)
+        self._add_action(tools_menu, "表單填寫...", self._form_fill_dialog)
+        tools_menu.addSeparator()
         self._add_action(tools_menu, "比較文件...", self._compare_dialog)
         self._add_action(tools_menu, "最佳化 PDF...", self._optimize_dialog)
         self._add_action(tools_menu, "批次處理...", self._batch_dialog)
+        tools_menu.addSeparator()
+        self._add_action(tools_menu, "套用永久塗黑", self._apply_redactions)
         tools_menu.addSeparator()
         self._add_action(tools_menu, "安全性設定...", self._security_dialog)
         self._add_action(tools_menu, "數位簽章...", self._sign_dialog)
@@ -156,27 +160,16 @@ class MainWindow(QMainWindow):
         tb.setStyleSheet("""
             QToolBar { spacing: 2px; padding: 2px 4px; }
             QToolButton {
-                padding: 4px 8px; border-radius: 4px;
+                padding: 3px 7px; border-radius: 4px;
                 border: 1px solid transparent;
-                font-size: 13px;
+                font-size: 12px;
             }
             QToolButton:hover { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.12); }
             QToolButton:checked { background: #0078d4; color: white; border-color: #005a9e; }
             QToolButton:pressed { background: rgba(0,0,0,0.12); }
         """)
 
-        for label, mode in [
-            ("手形", ToolMode.HAND),
-            ("選取", ToolMode.SELECT),
-            ("放大", ToolMode.ZOOM),
-            ("螢光筆", ToolMode.HIGHLIGHT),
-            ("底線", ToolMode.UNDERLINE),
-            ("便利貼", ToolMode.STICKY_NOTE),
-            ("文字框", ToolMode.TEXT_BOX),
-            ("圖章", ToolMode.STAMP),
-            ("塗黑", ToolMode.REDACT),
-            ("裁切", ToolMode.CROP),
-        ]:
+        def _add(label, mode):
             act = QAction(label, self)
             act.setCheckable(True)
             act.setData(mode)
@@ -184,8 +177,53 @@ class MainWindow(QMainWindow):
             tb.addAction(act)
             self._tool_actions[mode] = act
 
-        # ── 縮放百分比 ComboBox ──────────────────────────────────────
+        # ── 導覽 ─────────────────────────────────────────────────
+        _add("手形", ToolMode.HAND)
+        _add("選取", ToolMode.SELECT)
+        _add("放大", ToolMode.ZOOM)
         tb.addSeparator()
+
+        # ── 文字標記 ─────────────────────────────────────────────
+        _add("螢光筆", ToolMode.HIGHLIGHT)
+        _add("底線",   ToolMode.UNDERLINE)
+        _add("刪除線", ToolMode.STRIKEOUT)
+        tb.addSeparator()
+
+        # ── 文字 / 備注 ──────────────────────────────────────────
+        _add("便利貼", ToolMode.STICKY_NOTE)
+        _add("文字框", ToolMode.TEXT_BOX)
+        _add("標注框", ToolMode.CALLOUT)
+        tb.addSeparator()
+
+        # ── 手繪 ─────────────────────────────────────────────────
+        _add("手繪",   ToolMode.FREEHAND)
+        _add("橡皮擦", ToolMode.ERASER)
+        tb.addSeparator()
+
+        # ── 圖形 ─────────────────────────────────────────────────
+        _add("矩形", ToolMode.SHAPE_RECT)
+        _add("圓形", ToolMode.SHAPE_CIRCLE)
+        _add("線條", ToolMode.SHAPE_LINE)
+        _add("箭頭", ToolMode.SHAPE_ARROW)
+        tb.addSeparator()
+
+        # ── 編輯 ─────────────────────────────────────────────────
+        _add("圖章", ToolMode.STAMP)
+        _add("塗黑", ToolMode.REDACT)
+        _add("裁切", ToolMode.CROP)
+        tb.addSeparator()
+
+        # ── 測量 ─────────────────────────────────────────────────
+        _add("測距", ToolMode.MEASURE_DIST)
+        _add("測面積", ToolMode.MEASURE_AREA)
+        tb.addSeparator()
+
+        # ── 工具 ─────────────────────────────────────────────────
+        _add("連結",   ToolMode.LINK)
+        _add("表單欄", ToolMode.FORM_FIELD)
+        tb.addSeparator()
+
+        # ── 縮放百分比 ComboBox ──────────────────────────────────────
         self._zoom_combo = QComboBox()
         self._zoom_combo.setEditable(True)
         self._zoom_combo.setFixedWidth(80)
@@ -606,13 +644,7 @@ class MainWindow(QMainWindow):
         for action_mode, action in self._tool_actions.items():
             action.setChecked(action_mode == mode)
         tool = ToolFactory.create(mode, view, doc)
-        if tool is None:
-            if mode not in {ToolMode.HAND, ToolMode.SELECT, ToolMode.ZOOM}:
-                QMessageBox.information(self, "功能逐步補齊中",
-                    "這個工具仍在補強中，先提供核心標注工具。")
-            view.set_tool(None)
-            return
-        view.set_tool(tool)
+        view.set_tool(tool)   # None = 導覽模式（手形 / 選取 / 放大）
 
     # ── 最近檔案 ─────────────────────────────────────────────────
     def _update_recent_menu(self):
@@ -631,6 +663,27 @@ class MainWindow(QMainWindow):
         if doc:
             cur_page = view.current_page() if view else 0
             OCRDialog(doc, current_page=cur_page, parent=self).exec()
+
+    def _form_fill_dialog(self):
+        from ui.dialogs.forms.form_fill_dialog import FormFillDialog
+        doc = self._current_doc()
+        if doc:
+            FormFillDialog(doc, self).exec()
+
+    def _apply_redactions(self):
+        doc = self._current_doc()
+        if not doc:
+            return
+        reply = QMessageBox.question(
+            self, "套用永久塗黑",
+            "確定要永久塗黑所有標記區域？此操作無法復原。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            doc.annotations.apply_redactions()
+            view = self._current_view()
+            if view:
+                view.refresh()
 
     def _compare_dialog(self):
         from ui.dialogs.compare.compare_dialog import CompareDialog
