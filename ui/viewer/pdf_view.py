@@ -2,7 +2,7 @@
 import fitz
 from PyQt6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout,
                               QHBoxLayout, QSizePolicy, QFrame)
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPoint
 from PyQt6.QtGui import QWheelEvent
 
 from app.constants import LayoutMode, DEFAULT_ZOOM, ZOOM_LEVELS
@@ -15,6 +15,7 @@ class PDFView(QScrollArea):
     page_changed = pyqtSignal(int)
     zoom_changed = pyqtSignal(float)
     document_loaded = pyqtSignal()
+    page_context_requested = pyqtSignal(int, QPoint)   # page_num, global_pos
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,6 +64,7 @@ class PDFView(QScrollArea):
             pw = PageWidget(i, self._container)
             if self._active_tool:
                 pw.set_tool(self._active_tool)
+            pw.context_requested.connect(self.page_context_requested)
             # 用 fitz 頁面尺寸設定初始佔位大小，讓 layout 知道高度
             page = self._doc.fitz_doc[i]
             pw.setFixedSize(

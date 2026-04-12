@@ -80,6 +80,10 @@ class PageManager:
         self._doc._mark_modified()
         self._doc.page_count_changed.emit(doc.page_count)
 
+    def insert_pdf(self, other_path: str, insert_at: int):
+        """在指定位置插入 PDF（右鍵選單入口）"""
+        self.merge_pdf(other_path, insert_at=insert_at)
+
     def extract_pages(self, page_indices: list[int], output_path: str):
         """擷取指定頁面並存成新 PDF"""
         src_doc = self._ensure_doc()

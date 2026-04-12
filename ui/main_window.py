@@ -1,12 +1,14 @@
 # ~/Desktop/acropdf/ui/main_window.py
+from __future__ import annotations
+
 import os
 from PyQt6.QtWidgets import (
     QMainWindow, QTabWidget, QSplitter, QToolBar,
     QStatusBar, QLabel, QFileDialog, QMessageBox,
-    QInputDialog, QWidget, QTabBar
+    QInputDialog, QWidget, QMenu
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QAction, QKeySequence, QIcon
+from PyQt6.QtCore import Qt, QPoint, QSize
+from PyQt6.QtGui import QAction, QKeySequence, QShortcut
 
 from core.document import PDFDocument
 from ui.viewer.pdf_view import PDFView
@@ -14,6 +16,7 @@ from ui.panels.thumbnail_panel import ThumbnailPanel
 from ui.panels.bookmark_panel import BookmarkPanel
 from app.config import Config
 from app.constants import ToolMode
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -32,7 +35,6 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
 
-        # 左側面板
         self._left_tabs = QTabWidget()
         self._left_tabs.setMaximumWidth(220)
         self._left_tabs.setMinimumWidth(180)
@@ -41,7 +43,6 @@ class MainWindow(QMainWindow):
         self._left_tabs.addTab(self._thumbnail_panel, "縮圖")
         self._left_tabs.addTab(self._bookmark_panel, "書籤")
 
-        # 文件區（多頁籤）
         self._doc_tabs = QTabWidget()
         self._doc_tabs.setTabsClosable(True)
         self._doc_tabs.tabCloseRequested.connect(self._close_tab)
@@ -52,9 +53,9 @@ class MainWindow(QMainWindow):
         splitter.setSizes([220, 1060])
         self.setCentralWidget(splitter)
 
-        # 連接縮圖/書籤到目前文件
         self._thumbnail_panel.page_selected.connect(self._goto_page)
         self._thumbnail_panel.pages_reordered.connect(self._reorder_pages)
+        self._thumbnail_panel.context_action.connect(self._thumb_context_action)
         self._bookmark_panel.bookmark_clicked.connect(self._goto_page)
 
     def _setup_menu(self):
@@ -76,9 +77,7 @@ class MainWindow(QMainWindow):
         # 編輯
         edit_menu = mb.addMenu("編輯(&E)")
         self._add_action(edit_menu, "復原(&Z)", self._undo, "Ctrl+Z")
-        redo_act = self._add_action(edit_menu, "取消復原(&Y)", self._redo, "Ctrl+Y")
-        from PyQt6.QtGui import QKeySequence
-        from PyQt6.QtWidgets import QShortcut
+        self._add_action(edit_menu, "取消復原(&Y)", self._redo, "Ctrl+Y")
         QShortcut(QKeySequence("Ctrl+Shift+Z"), self).activated.connect(self._redo)
 
         # 檢視
@@ -94,8 +93,10 @@ class MainWindow(QMainWindow):
         page_menu = mb.addMenu("頁面(&P)")
         self._add_action(page_menu, "合併 PDF...", self._merge_pdf)
         self._add_action(page_menu, "分割 PDF...", self._split_pdf)
+        self._add_action(page_menu, "擷取頁面...", self._extract_pages)
+        page_menu.addSeparator()
         self._add_action(page_menu, "插入空白頁", self._insert_blank_page)
-        self._add_action(page_menu, "刪除選取頁面", self._delete_pages)
+        self._add_action(page_menu, "刪除選取頁面", self._delete_pages, "Delete")
         page_menu.addSeparator()
         self._add_action(page_menu, "向右旋轉 90°", lambda: self._rotate(90), "Ctrl+Shift+R")
         self._add_action(page_menu, "向左旋轉 90°", lambda: self._rotate(-90))
@@ -134,8 +135,18 @@ class MainWindow(QMainWindow):
         tb = self.addToolBar("工具列")
         tb.setIconSize(QSize(20, 20))
         tb.setMovable(False)
+        tb.setStyleSheet("""
+            QToolBar { spacing: 2px; padding: 2px 4px; }
+            QToolButton {
+                padding: 4px 8px; border-radius: 4px;
+                border: 1px solid transparent;
+                font-size: 13px;
+            }
+            QToolButton:hover { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.12); }
+            QToolButton:checked { background: #0078d4; color: white; border-color: #005a9e; }
+            QToolButton:pressed { background: rgba(0,0,0,0.12); }
+        """)
 
-        # 工具按鈕（簡化版，之後各 tool 可擴充）
         for label, mode in [
             ("手形", ToolMode.HAND),
             ("選取", ToolMode.SELECT),
@@ -190,13 +201,13 @@ class MainWindow(QMainWindow):
         view.load_document(doc)
         view.page_changed.connect(self._on_page_changed)
         view.zoom_changed.connect(self._on_zoom_changed)
+        view.page_context_requested.connect(self._show_page_context_menu)
 
         name = doc.display_name
         idx = self._doc_tabs.addTab(view, name)
         self._doc_tabs.setCurrentIndex(idx)
         self._docs.append(doc)
 
-        # 更新側邊面板
         self._thumbnail_panel.load_document(doc)
         self._bookmark_panel.load_document(doc)
 
@@ -220,7 +231,7 @@ class MainWindow(QMainWindow):
             self._docs.pop(index)
 
     def _on_tab_changed(self, index: int):
-        if index >= 0 and index < len(self._docs):
+        if 0 <= index < len(self._docs):
             doc = self._docs[index]
             self._thumbnail_panel.load_document(doc)
             self._bookmark_panel.load_document(doc)
@@ -232,6 +243,15 @@ class MainWindow(QMainWindow):
     def _current_doc(self) -> PDFDocument | None:
         idx = self._doc_tabs.currentIndex()
         return self._docs[idx] if 0 <= idx < len(self._docs) else None
+
+    def _selected_pages(self, fallback_current: bool = True) -> list[int]:
+        """縮圖面板選取的頁面；若無選取且 fallback_current=True，回傳目前頁面。"""
+        sel = self._thumbnail_panel.selected_page_indices()
+        if not sel and fallback_current:
+            view = self._current_view()
+            if view:
+                return [view.current_page()]
+        return sel
 
     # ── 儲存 ─────────────────────────────────────────────────────
     def save(self):
@@ -254,37 +274,169 @@ class MainWindow(QMainWindow):
             idx = self._doc_tabs.currentIndex()
             self._doc_tabs.setTabText(idx, doc.display_name)
 
-    # ── 頁面操作 ─────────────────────────────────────────────────
-    def _rotate(self, angle: int):
-        doc = self._current_doc()
-        view = self._current_view()
-        if doc and view:
-            selected = self._thumbnail_panel.selectedItems()
-            if selected:
-                indices = [item.data(Qt.ItemDataRole.UserRole) for item in selected]
-            else:
-                indices = [view.current_page()]
-            doc.pages.rotate(indices, angle)
-
-    def _delete_pages(self):
+    # ── 右鍵選單 ─────────────────────────────────────────────────
+    def _thumb_context_action(self, action_id: str, indices: list[int]):
         doc = self._current_doc()
         if not doc:
             return
-        selected = self._thumbnail_panel.selectedItems()
-        if not selected:
-            QMessageBox.information(self, "提示", "請在縮圖面板中選取要刪除的頁面")
+        view = self._current_view()
+
+        if action_id == "delete":
+            n = len(indices)
+            if QMessageBox.question(
+                self, "確認刪除", f"確定要刪除第 {', '.join(str(i+1) for i in indices)} 頁（共 {n} 頁）？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            ) == QMessageBox.StandardButton.Yes:
+                doc.pages.delete(indices)
+
+        elif action_id == "extract":
+            from ui.dialogs.page_ops.extract_dialog import ExtractDialog
+            ExtractDialog(doc, indices, self).exec()
+
+        elif action_id == "split":
+            from ui.dialogs.page_ops.split_dialog import SplitDialog
+            SplitDialog(doc, indices, self).exec()
+
+        elif action_id == "rotate_cw":
+            doc.pages.rotate(indices, 90)
+
+        elif action_id == "rotate_ccw":
+            doc.pages.rotate(indices, -90)
+
+        elif action_id == "insert_blank_before":
+            doc.pages.insert_blank(indices[0])
+
+        elif action_id == "insert_blank_after":
+            doc.pages.insert_blank(indices[-1] + 1)
+
+        elif action_id == "insert_from_file":
+            path, _ = QFileDialog.getOpenFileName(
+                self, "選擇要插入的 PDF", "", "PDF 檔案 (*.pdf)"
+            )
+            if path:
+                doc.pages.insert_pdf(path, indices[0])
+
+        elif action_id == "replace":
+            path, _ = QFileDialog.getOpenFileName(
+                self, "選擇取代來源 PDF", "", "PDF 檔案 (*.pdf)"
+            )
+            if path:
+                import fitz
+                src = fitz.open(path)
+                for i, dest_idx in enumerate(sorted(indices)):
+                    if i < src.page_count:
+                        doc.fitz_doc[dest_idx].show_pdf_page(
+                            doc.fitz_doc[dest_idx].rect, src, i)
+                src.close()
+                doc._mark_modified()
+
+        elif action_id == "watermark":
+            self._watermark_dialog()
+
+        elif action_id == "header_footer":
+            self._header_footer_dialog()
+
+        elif action_id == "properties":
+            from ui.dialogs.page_ops.page_properties_dialog import PagePropertiesDialog
+            PagePropertiesDialog(doc, indices, self).exec()
+
+    def _show_page_context_menu(self, page_num: int, global_pos: QPoint):
+        """主視圖右鍵選單（對齊 Adobe Acrobat）"""
+        doc = self._current_doc()
+        if not doc:
             return
-        indices = [item.data(Qt.ItemDataRole.UserRole) for item in selected]
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                border: 1px solid rgba(0,0,0,0.15);
+                border-radius: 6px;
+                padding: 4px;
+                background: palette(window);
+            }
+            QMenu::item { padding: 6px 28px 6px 12px; border-radius: 4px; }
+            QMenu::item:selected { background: #0078d4; color: white; }
+            QMenu::separator { height: 1px; background: rgba(0,0,0,0.1); margin: 4px 8px; }
+        """)
+
+        # ── 標注 ──────────────────────────────────
+        menu.addAction("加入螢光筆",
+                       lambda: self._set_tool(ToolMode.HIGHLIGHT))
+        menu.addAction("加入底線",
+                       lambda: self._set_tool(ToolMode.UNDERLINE))
+        menu.addAction("加入便利貼...",
+                       lambda: self._set_tool(ToolMode.STICKY_NOTE))
+        menu.addAction("加入文字框...",
+                       lambda: self._set_tool(ToolMode.TEXT_BOX))
+        menu.addAction("加入圖章",
+                       lambda: self._set_tool(ToolMode.STAMP))
+        menu.addAction("標記塗黑",
+                       lambda: self._set_tool(ToolMode.REDACT))
+        menu.addSeparator()
+
+        # ── 頁面操作 ──────────────────────────────
+        page_submenu = menu.addMenu("頁面操作")
+        page_submenu.addAction(f"向右旋轉 90°（第 {page_num+1} 頁）",
+                               lambda: doc.pages.rotate([page_num], 90))
+        page_submenu.addAction(f"向左旋轉 90°（第 {page_num+1} 頁）",
+                               lambda: doc.pages.rotate([page_num], -90))
+        page_submenu.addSeparator()
+        page_submenu.addAction("在此頁前插入空白頁",
+                               lambda: doc.pages.insert_blank(page_num))
+        page_submenu.addAction("在此頁後插入空白頁",
+                               lambda: doc.pages.insert_blank(page_num + 1))
+        page_submenu.addSeparator()
+        page_submenu.addAction(f"擷取第 {page_num+1} 頁...",
+                               lambda: self._thumb_context_action("extract", [page_num]))
+        page_submenu.addAction(f"刪除第 {page_num+1} 頁",
+                               lambda: self._confirm_delete([page_num]))
+        menu.addSeparator()
+
+        # ── 其他 ──────────────────────────────────
+        menu.addAction("頁面屬性...",
+                       lambda: self._thumb_context_action("properties", [page_num]))
+
+        menu.exec(global_pos)
+
+    # ── 頁面操作 ─────────────────────────────────────────────────
+    def _confirm_delete(self, indices: list[int]):
+        doc = self._current_doc()
+        if not doc:
+            return
+        n = len(indices)
         if QMessageBox.question(
-            self, "確認刪除", f"確定要刪除 {len(indices)} 頁嗎？"
+            self, "確認刪除", f"確定要刪除 {n} 頁嗎？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         ) == QMessageBox.StandardButton.Yes:
             doc.pages.delete(indices)
+
+    def _rotate(self, angle: int):
+        doc = self._current_doc()
+        if not doc:
+            return
+        indices = self._selected_pages()
+        doc.pages.rotate(indices, angle)
+
+    def _delete_pages(self):
+        indices = self._selected_pages(fallback_current=False)
+        if not indices:
+            QMessageBox.information(self, "提示", "請先在縮圖面板 Ctrl/Shift 點選要刪除的頁面")
+            return
+        self._confirm_delete(indices)
 
     def _insert_blank_page(self):
         doc = self._current_doc()
         view = self._current_view()
         if doc and view:
             doc.pages.insert_blank(view.current_page())
+
+    def _extract_pages(self):
+        doc = self._current_doc()
+        if not doc:
+            return
+        indices = self._selected_pages(fallback_current=False)
+        from ui.dialogs.page_ops.extract_dialog import ExtractDialog
+        ExtractDialog(doc, indices, self).exec()
 
     def _merge_pdf(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -299,9 +451,9 @@ class MainWindow(QMainWindow):
         doc = self._current_doc()
         if not doc:
             return
+        indices = self._selected_pages(fallback_current=False)
         from ui.dialogs.page_ops.split_dialog import SplitDialog
-        d = SplitDialog(doc, self)
-        d.exec()
+        SplitDialog(doc, indices, self).exec()
 
     def _reorder_pages(self, new_order: list[int]):
         doc = self._current_doc()
@@ -319,8 +471,7 @@ class MainWindow(QMainWindow):
         from ui.dialogs.page_ops.header_footer_dialog import HeaderFooterDialog
         doc = self._current_doc()
         if doc:
-            d = HeaderFooterDialog(doc, self)
-            d.exec()
+            HeaderFooterDialog(doc, self).exec()
 
     # ── 導覽 ─────────────────────────────────────────────────────
     def _goto_page(self, page_num: int):
@@ -332,10 +483,10 @@ class MainWindow(QMainWindow):
         doc = self._current_doc()
         if not doc:
             return
+        cur = self._current_view().current_page() + 1 if self._current_view() else 1
         page, ok = QInputDialog.getInt(
             self, "跳至頁面", f"頁碼 (1–{doc.page_count})：",
-            value=self._current_view().current_page() + 1 if self._current_view() else 1,
-            min=1, max=doc.page_count
+            value=cur, min=1, max=doc.page_count
         )
         if ok:
             self._goto_page(page - 1)
@@ -384,19 +535,17 @@ class MainWindow(QMainWindow):
     # ── 工具選擇 ─────────────────────────────────────────────────
     def _set_tool(self, mode: ToolMode):
         from ui.tools.annotation_tools import ToolFactory
-
         view = self._current_view()
         doc = self._current_doc()
         if not view or not doc:
             return
-
         for action_mode, action in self._tool_actions.items():
             action.setChecked(action_mode == mode)
-
         tool = ToolFactory.create(mode, view, doc)
         if tool is None:
             if mode not in {ToolMode.HAND, ToolMode.SELECT, ToolMode.ZOOM}:
-                QMessageBox.information(self, "功能逐步補齊中", "這個工具仍在補強中，先提供核心標注工具。")
+                QMessageBox.information(self, "功能逐步補齊中",
+                    "這個工具仍在補強中，先提供核心標注工具。")
             view.set_tool(None)
             return
         view.set_tool(tool)
@@ -410,7 +559,7 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda checked, p=path: self.open_file(p))
             self._recent_menu.addAction(act)
 
-    # ── Phase 2/3/4 預留入口（後續實作）─────────────────────────
+    # ── Phase 2/3/4 ──────────────────────────────────────────────
     def _ocr_dialog(self):
         from ui.dialogs.ocr.ocr_dialog import OCRDialog
         doc = self._current_doc()
