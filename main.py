@@ -1,12 +1,28 @@
 # ~/Desktop/acropdf/main.py
 import sys
 import os
+import json
+from pathlib import Path
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.0.1-hotfix1"
+APP_VERSION = "1.0.2"
+
+# loader.py 透過此檔與子程序溝通當前開啟的 PDF
+_STATE_FILE = Path(__file__).parent / ".loader_state"
+
+
+def _write_state(pdf_path: str | None):
+    """把當前開啟的 PDF 路徑寫給 loader，供熱重載後還原。"""
+    try:
+        _STATE_FILE.write_text(
+            json.dumps({"current_file": pdf_path or ""})
+        )
+    except Exception:
+        pass
+
 
 def main():
     # HiDPI 設定（必須在 QApplication 之前）
@@ -24,13 +40,32 @@ def main():
 
     from ui.main_window import MainWindow
     window = MainWindow()
+
+    # ── 與 loader 溝通：追蹤當前開啟的 PDF ──────────────
+    def _on_file_opened(path: str):
+        _write_state(path)
+
+    def _on_file_closed():
+        _write_state(None)
+
+    # 連接 MainWindow 的 file_opened / file_closed 信號（若有）
+    # 若 MainWindow 尚未有這些信號，用 monkey-patch 方式追蹤 open_file
+    _orig_open = window.open_file
+    def _patched_open(path, *a, **kw):
+        result = _orig_open(path, *a, **kw)
+        _write_state(os.path.abspath(path))
+        return result
+    window.open_file = _patched_open  # type: ignore[method-assign]
+
     window.show()
 
-    # 若從命令列帶入 PDF 路徑
+    # 若從命令列帶入 PDF 路徑（loader 傳入的上次檔案）
     if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
         window.open_file(sys.argv[1])
 
-    sys.exit(app.exec())
+    code = app.exec()
+    _write_state(None)   # 正常退出時清空狀態
+    sys.exit(code)
 
 def _is_dark_mode() -> bool:
     """偵測系統是否為深色模式（macOS / Windows 通用）。"""
