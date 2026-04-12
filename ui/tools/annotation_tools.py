@@ -113,6 +113,57 @@ class RectTool(BaseTool):
         self._start = None
 
 
+class CropTool(BaseTool):
+    """拖曳選框裁切頁面。滑鼠按下拖曳畫矩形，放開後詢問確認，執行 set_cropbox。"""
+
+    def __init__(self, mode, view, doc):
+        super().__init__(mode, view, doc)
+        self._overlay: QRect | None = None
+
+    def mouse_press(self, widget, event, pos: QPoint):
+        super().mouse_press(widget, event, pos)
+        self._overlay = None
+
+    def mouse_move(self, widget, event, pos: QPoint):
+        if self._start:
+            self._overlay = _normalized_rect(self._start, pos)
+            widget.update()  # 觸發 paintEvent 重繪
+
+    def mouse_release(self, widget, event, pos: QPoint):
+        if event.button() != Qt.MouseButton.LeftButton or not self._start:
+            return
+        rect_w = _normalized_rect(self._start, pos)
+        self._overlay = None
+        widget.update()
+
+        if rect_w.width() < 5 or rect_w.height() < 5:
+            self._start = None
+            return
+
+        pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+
+        reply = QMessageBox.question(
+            widget, "確認裁切",
+            f"裁切第 {widget.page_num+1} 頁至選取範圍？\n（可透過「還原全頁」恢復）",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.doc.pages.crop(widget.page_num, pdf_rect)
+        self._start = None
+
+    def draw_overlay(self, widget, painter):
+        """由 PageWidget.paintEvent 呼叫，畫橡皮筋選框。"""
+        if not self._overlay:
+            return
+        from PyQt6.QtGui import QColor, QPen
+        painter.save()
+        pen = QPen(QColor(0, 120, 215), 2, Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(QColor(0, 120, 215, 30))
+        painter.drawRect(self._overlay)
+        painter.restore()
+
+
 class ToolFactory:
     @staticmethod
     def create(mode: ToolMode, view, doc):
@@ -123,6 +174,7 @@ class ToolFactory:
             ToolMode.REDACT: RedactTool,
             ToolMode.HIGHLIGHT: HighlightTool,
             ToolMode.SHAPE_RECT: RectTool,
+            ToolMode.CROP: CropTool,
         }
         tool_cls = mapping.get(mode)
         return tool_cls(mode, view, doc) if tool_cls else None

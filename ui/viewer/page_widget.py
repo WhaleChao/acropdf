@@ -48,6 +48,8 @@ class PageWidget(QWidget):
             painter.drawPixmap(0, 0, self._pixmap)
         else:
             painter.fillRect(self.rect(), QColor(220, 220, 220))
+        if self._tool and hasattr(self._tool, 'draw_overlay'):
+            self._tool.draw_overlay(self, painter)
         painter.end()
 
     def mousePressEvent(self, event):

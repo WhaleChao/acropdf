@@ -5,7 +5,7 @@ import os
 from PyQt6.QtWidgets import (
     QMainWindow, QTabWidget, QSplitter, QToolBar,
     QStatusBar, QLabel, QFileDialog, QMessageBox,
-    QInputDialog, QWidget, QMenu
+    QInputDialog, QWidget, QMenu, QComboBox
 )
 from pathlib import Path
 from PyQt6.QtCore import Qt, QPoint, QSize
@@ -52,6 +52,8 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
 
         self._left_tabs = QTabWidget()
+        self._left_tabs.tabBar().setExpanding(False)   # 不撐滿，緊湊顯示
+        self._left_tabs.tabBar().setDocumentMode(True)  # 更平整的外觀
         self._left_tabs.setMaximumWidth(220)
         self._left_tabs.setMinimumWidth(180)
         self._thumbnail_panel = ThumbnailPanel()
@@ -181,6 +183,21 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda checked, m=mode: self._set_tool(m))
             tb.addAction(act)
             self._tool_actions[mode] = act
+
+        # ── 縮放百分比 ComboBox ──────────────────────────────────────
+        tb.addSeparator()
+        self._zoom_combo = QComboBox()
+        self._zoom_combo.setEditable(True)
+        self._zoom_combo.setFixedWidth(80)
+        self._zoom_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self._zoom_combo.addItems([
+            "25%", "50%", "75%", "100%", "125%", "150%",
+            "175%", "200%", "300%", "400%", "適合頁面", "適合寬度",
+        ])
+        self._zoom_combo.setCurrentText("100%")
+        self._zoom_combo.activated.connect(self._on_zoom_combo_activated)
+        self._zoom_combo.lineEdit().returnPressed.connect(self._on_zoom_combo_return)
+        tb.addWidget(self._zoom_combo)
 
     def _setup_statusbar(self):
         self._status_bar = self.statusBar()
@@ -514,7 +531,38 @@ class MainWindow(QMainWindow):
         self._thumbnail_panel.setCurrentRow(page_num)
 
     def _on_zoom_changed(self, zoom: float):
-        self._zoom_label.setText(f"{zoom*100:.0f}%")
+        pct = f"{zoom*100:.0f}%"
+        self._zoom_label.setText(pct)
+        # 同步更新工具列 ComboBox（暫時斷開訊號防止循環觸發）
+        self._zoom_combo.blockSignals(True)
+        self._zoom_combo.setCurrentText(pct)
+        self._zoom_combo.blockSignals(False)
+
+    def _on_zoom_combo_activated(self, index: int):
+        """使用者從下拉選單選擇項目。"""
+        text = self._zoom_combo.itemText(index)
+        self._apply_zoom_text(text)
+
+    def _on_zoom_combo_return(self):
+        """使用者在 ComboBox 文字欄位按 Enter。"""
+        self._apply_zoom_text(self._zoom_combo.currentText())
+
+    def _apply_zoom_text(self, text: str):
+        view = self._current_view()
+        if not view:
+            return
+        text = text.strip()
+        if text == "適合頁面":
+            view.fit_page()
+        elif text == "適合寬度":
+            view.fit_width()
+        else:
+            # 解析數字，接受「150」或「150%」
+            try:
+                value = float(text.rstrip("%"))
+                view.set_zoom(value / 100.0)
+            except ValueError:
+                pass
 
     # ── 縮放 ─────────────────────────────────────────────────────
     def _zoom_in(self):
