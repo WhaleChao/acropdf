@@ -299,6 +299,15 @@ class AutoLabelEngine:
 
 # ────────────────────── 內部輔助函式 ──────────────────────────────────
 
+# ── OCR 數字間距修正：「1 1 4」→「114」、「3 0 5 8」→「3058」────────
+# 匹配「單一數字 + 空格」連續出現 2+ 次，後接一個數字（漢字前後也適用）
+_SPACED_DIGITS = re.compile(r"(\d)((?:\s\d){2,})")
+
+def _fix_spaced_digits(text: str) -> str:
+    """修正 OCR 掃描時數字被空格拆開的問題，例如 '1 1 4' → '114'。"""
+    return _SPACED_DIGITS.sub(lambda m: m.group(0).replace(" ", ""), text)
+
+
 # ── 台灣司法文件常見 OCR 清洗規則 ────────────────────────────────────
 # 司法院線上閱卷系統 (OLA) 每頁都會印使用者姓名 + 系統浮水印，需過濾
 _OLA_WATERMARK = re.compile(
@@ -359,7 +368,8 @@ def _clean_ocr_lines(lines: list[str]) -> list[str]:
         # 單行內同一短詞重複 ≥3 次
         if re.search(r"(.{2,6})\1{2,}", ln):
             continue
-        cleaned.append(ln)
+        # 修正 OCR 數字間距（「1 1 4」→「114」）
+        cleaned.append(_fix_spaced_digits(ln))
     return cleaned
 
 
