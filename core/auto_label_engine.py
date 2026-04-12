@@ -174,15 +174,29 @@ class AutoLabelEngine:
 
         return boundaries
 
-    # ── 策略 4：AI（OCR + Gemma 4）────────────────────────────────
+    # ── 策略 4：AI（專精 OCR 引擎 + 啟發式 + 可選 Gemma 文字清理）─────
     @staticmethod
     def _from_ai(
         doc: fitz.Document,
         on_progress: Optional[Callable] = None,
     ) -> list[DocBoundary]:
         """
-        逐頁：僅 OCR 頁面上半 35% → Gemma 4 判斷是否為新文件首頁並提取標題。
-        記憶體：每頁 pixmap 用完立即釋放。
+        影像辨識策略（適用掃描 PDF）。
+
+        架構：
+          ① macOS → Apple Vision Framework（OS 原生，專精 OCR，零額外記憶體）
+             Windows → WinRT OCR（Win10 內建，同理）
+             fallback → Tesseract
+          ② OCR 文字 → 啟發式正規表示式提取標題（大多數情況就夠）
+          ③ 啟發式失敗 → 送 Gemma 4 文字模型做語意判斷
+             ★ Gemma 4 在此只做「文字理解」，不做影像處理
+             ★ 影像辨識完全交給 ① 的專用 OCR 引擎
+             ★ Gemma 4 已常駐記憶體（port 8080），不另外載入模型
+
+        記憶體設計：
+          - 每頁只裁頂部 30%，dpi=120（夠 OCR 辨識，避免大圖）
+          - pixmap 用後立即設 None 釋放
+          - Gemma 呼叫：max_tokens=40，純文字，不送圖片
         """
         try:
             from acro_platform import get_ocr_backend
@@ -201,28 +215,37 @@ class AutoLabelEngine:
             page = doc[i]
             rect = page.rect
 
-            # ── 1. 只裁頂部 35%，省記憶體 ──────────────────────
+            # ── ① 只裁頂部 30%，dpi=120，省記憶體 ───────────────
             clip = fitz.Rect(
                 rect.x0, rect.y0,
-                rect.x1, rect.y0 + rect.height * 0.35,
+                rect.x1, rect.y0 + rect.height * 0.30,
             )
-            pix = page.get_pixmap(clip=clip, dpi=150)
+            pix = page.get_pixmap(clip=clip, dpi=120)
 
-            # ── 2. OCR ──────────────────────────────────────────
+            # ── ② 專用 OCR 引擎辨識影像 ─────────────────────────
             ocr_text = ""
             if backend:
                 ocr_text = _ocr_pixmap_to_text(backend, pix)
-            pix = None   # ★ 立即釋放 pixmap
+            pix = None   # ★ 立即釋放
 
             if not ocr_text.strip():
                 continue
 
-            # ── 3. Gemma 4 推斷標題 ─────────────────────────────
-            title = _gemma_extract_title(ocr_text, prev_title)
+            lines = [ln.strip() for ln in ocr_text.split("\n") if ln.strip()]
+
+            # ── ③-a 啟發式：大多數有規律文件直接命中 ───────────
+            title = _extract_title_heuristic(lines)
+            confidence = 0.8
+
+            # ── ③-b 啟發式失敗 → Gemma 4 文字語意判斷 ──────────
+            if not title:
+                title = _gemma_clarify_title(ocr_text[:300], prev_title)
+                confidence = 0.7 if title else 0.0
+
             if title:
                 boundaries.append(DocBoundary(
                     page_num=i, title=title,
-                    strategy="ai", confidence=0.8,
+                    strategy="ai", confidence=confidence,
                 ))
                 prev_title = title
 
@@ -276,30 +299,95 @@ class AutoLabelEngine:
 
 # ────────────────────── 內部輔助函式 ──────────────────────────────────
 
-# 常見公文標題正規表示式
-_DATE_RE    = re.compile(r"\d{2,3}[./年]\d{1,2}[./月]?\d{0,2}")
-_TITLE_STOP = re.compile(r"(第\d+頁|共\d+頁|附件|附表|備註|說明：)")
+# ── 台灣司法文件常見 OCR 清洗規則 ────────────────────────────────────
+# 司法院線上閱卷系統 (OLA) 每頁都會印使用者姓名 + 系統浮水印，需過濾
+_OLA_WATERMARK = re.compile(
+    r"(司法院線上閱卷系統|作業平台|\d{3}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})"
+)
+# 數字/符號雜訊行（OCR 對印章/表格邊框誤讀）
+_NOISE_LINE    = re.compile(r"^[\d\s\-_/\\|.,:;。、　]+$")
+# 常見「不是標題」的行
+_TITLE_STOP    = re.compile(
+    r"(第\d+頁|共\d+頁|附件|附表|備註|說明：|文書種類|起訖頁數|本卷宗連底)"
+)
+# 公文日期（民國格式）
+_DATE_RE       = re.compile(r"\d{2,3}[./年]\d{1,2}[./月]?\d{0,2}")
+# 公文類型關鍵字
+_DOC_TYPE_RE   = re.compile(
+    r"(筆錄|判決|裁定|起訴書|不起訴|聲請書|搜索票|拘票|押票"
+    r"|扣押|調查報告|鑑定書|相驗|解剖|診斷書|證明書|委任狀"
+    r"|函|令|通知書|傳票|聲押書|警詢|偵訊|訊問|陳述書|告訴狀)"
+)
+
+
+def _clean_ocr_lines(lines: list[str]) -> list[str]:
+    """
+    去除 OLA 浮水印、雜訊行，回傳有意義的文字行。
+
+    OLA 浮水印模式：
+      - 使用者姓名（2~5字）連續出現 ≥3 行 → 全部視為浮水印
+      - 同一短詞在單行內重複 ≥3 次
+      - 司法院線上閱卷系統 + 時間戳記
+    """
+    # 先找出連續重複短行（使用者姓名浮水印）
+    watermark_lines: set[int] = set()
+    i = 0
+    while i < len(lines):
+        ln = lines[i].strip()
+        if 2 <= len(ln) <= 8:
+            # 計算連續相同行數
+            j = i + 1
+            while j < len(lines) and lines[j].strip() == ln:
+                j += 1
+            if j - i >= 2:   # 相同行出現 ≥2 次視為浮水印
+                watermark_lines.update(range(i, j))
+        i += 1
+
+    cleaned = []
+    for idx, ln in enumerate(lines):
+        ln = ln.strip()
+        if not ln or len(ln) < 2:
+            continue
+        if idx in watermark_lines:
+            continue
+        if _OLA_WATERMARK.search(ln):
+            continue
+        if _NOISE_LINE.match(ln):
+            continue
+        if _TITLE_STOP.search(ln):
+            continue
+        # 單行內同一短詞重複 ≥3 次
+        if re.search(r"(.{2,6})\1{2,}", ln):
+            continue
+        cleaned.append(ln)
+    return cleaned
 
 
 def _extract_title_heuristic(lines: list[str]) -> str:
     """
-    從頁面前幾行試圖找出文件標題。
-    策略：最長且符合格式的前三行。
+    從頁面行列中提取文件標題。
+    先清洗 OLA 浮水印，再按優先序抓標題：
+      1. 含文件類型關鍵字的行（最高信心）
+      2. 含民國年月日的短行
+      3. 第一個長度 ≤ 40 字的非雜訊行（fallback）
     """
-    candidates = []
-    for ln in lines[:6]:
-        if len(ln) < 3 or _TITLE_STOP.search(ln):
-            continue
-        if _DATE_RE.search(ln) and len(ln) < 50:
-            candidates.append(ln)
-        elif re.search(r"(筆錄|書|票|表|狀|函|令|報告|裁定|判決)", ln):
-            candidates.append(ln)
+    clean = _clean_ocr_lines(lines)
+    if not clean:
+        return ""
 
-    if candidates:
-        return candidates[0][:60]
-    # fallback：第一行夠短就用
-    if lines and len(lines[0]) <= 40:
-        return lines[0]
+    # 優先：文件類型關鍵字
+    for ln in clean[:10]:
+        if _DOC_TYPE_RE.search(ln) and len(ln) <= 60:
+            return ln[:60]
+
+    # 次選：含日期的短行
+    for ln in clean[:8]:
+        if _DATE_RE.search(ln) and 4 < len(ln) <= 50:
+            return ln[:50]
+
+    # fallback：第一個乾淨行（夠短）
+    if clean and len(clean[0]) <= 40:
+        return clean[0]
     return ""
 
 
@@ -346,27 +434,34 @@ def _ocr_pixmap_to_text(backend, pix: fitz.Pixmap) -> str:
             pass
 
 
-def _gemma_extract_title(ocr_text: str, prev_title: Optional[str] = None) -> str:
+def _gemma_clarify_title(ocr_text: str, prev_title: Optional[str] = None) -> str:
     """
-    呼叫 Gemma 4（oMLX port 8080）判斷 OCR 文字是否為新文件首頁，
-    並提取簡短文件名稱（≤ 30 字）。
-    記憶體友好：只傳前 400 字，streaming=False，timeout=20s。
+    Gemma 4 純文字語意兜底：僅在啟發式無法從 OCR 文字辨識標題時呼叫。
+
+    ★ 角色分工：
+      - 影像辨識（OCR）由 Apple Vision / WinRT / Tesseract 負責（專精 OCR 引擎）
+      - Gemma 4 只做「文字理解與標題清理」，不接觸圖片
+      - Gemma 4 已在 port 8080 常駐，此呼叫不載入任何新模型
+
+    記憶體設計：
+      - 只傳前 300 字（夠判斷，不浪費 token）
+      - max_tokens=40（只需短回覆）
+      - timeout=15s（避免 UI 卡住）
+      - 優先取 content，其次取 reasoning_content（Gemma 4 思考模式）
     """
-    snippet = ocr_text.strip()[:400]
-    context = f"\n（上一份文件：{prev_title}）" if prev_title else ""
+    snippet = ocr_text.strip()[:300]
+    context = f"（上一份：{prev_title}）" if prev_title else ""
     prompt = (
-        f"以下是一份台灣法院偵查卷證文件首頁上半部的 OCR 文字{context}。\n"
-        f"請判斷這是否是一份新文件的第一頁。\n"
-        f"若是，請只回覆文件名稱（不超過 30 字，格式如：YYMMDD_姓名_文件類型）；\n"
-        f"若不是（例如是內文續頁），只回覆「續頁」。\n\n"
-        f"OCR 文字：\n{snippet}"
+        f"以下是台灣司法文件的 OCR 文字片段{context}。"
+        f"若這是新文件首頁，只回答文件名稱（≤20字）；若是續頁，回答「續頁」。\n"
+        f"文字：{snippet}"
     )
 
     payload = json.dumps({
         "model": AutoLabelEngine.GEMMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 60,
-        "temperature": 0.1,
+        "max_tokens": 40,
+        "temperature": 0.05,
         "stream": False,
     }).encode()
 
@@ -377,13 +472,19 @@ def _gemma_extract_title(ocr_text: str, prev_title: Optional[str] = None) -> str
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=AutoLabelEngine.GEMMA_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
-        reply = data["choices"][0]["message"]["content"].strip()
-        if "續頁" in reply or len(reply) < 2:
+        msg = data["choices"][0]["message"]
+        # Gemma 4 思考模式：content 可能為 None，從 reasoning_content 取最後結論
+        reply = (msg.get("content") or "").strip()
+        if not reply:
+            rc = (msg.get("reasoning_content") or "")
+            # reasoning 末尾通常是結論，取最後一個非空行
+            lines = [l.strip() for l in rc.splitlines() if l.strip()]
+            reply = lines[-1] if lines else ""
+        if not reply or "續頁" in reply or len(reply) < 2:
             return ""
-        # 清理 Gemma 可能加的前綴
-        reply = re.sub(r"^(文件名稱[：:]\s*|名稱[：:]\s*)", "", reply).strip()
+        reply = re.sub(r"^(文件名稱[：:]\s*|名稱[：:]\s*|答[：:]\s*)", "", reply).strip()
         return reply[:60]
     except Exception:
         return ""
