@@ -1,0 +1,14 @@
+PyQt6>=6.6
+PyMuPDF>=1.24
+pymupdf-fonts
+pikepdf
+pypdf
+pyhanko
+pyhanko-certvalidator
+openpyxl
+python-pptx
+python-docx
+pytesseract
+Pillow
+reportlab
+cryptography

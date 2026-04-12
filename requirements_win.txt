@@ -1,0 +1,2 @@
+-r requirements.txt
+# Windows OCR 使用內建 WinRT API，不需額外套件
