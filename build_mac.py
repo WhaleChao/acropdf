@@ -58,19 +58,42 @@ def build(onefile: bool, sign_id: str | None):
         "--clean",
         "--distpath", str(DIST),
         "--workpath", str(BUILD),
-        # 資源目錄整包帶入
+        # 資源目錄整包帶入（含 app/ 常數與設定）
         "--add-data", f"{BASE / 'resources'}:resources",
         "--add-data", f"{BASE / 'ui'}:ui",
         "--add-data", f"{BASE / 'core'}:core",
+        "--add-data", f"{BASE / 'app'}:app",
         "--add-data", f"{BASE / 'rendering'}:rendering",
         "--add-data", f"{BASE / 'acro_platform'}:acro_platform",
-        # 隱式 import（PyMuPDF / PyQt6 需要）
+        # ── PyMuPDF / PyQt6 ──────────────────────────────────
         "--hidden-import", "fitz",
         "--hidden-import", "fitz.utils",
         "--hidden-import", "PyQt6.sip",
         "--hidden-import", "PyQt6.QtPrintSupport",
         "--collect-all",  "fitz",
         "--collect-all",  "pymupdf_fonts",
+        # ── PDF 安全 / 簽章 ───────────────────────────────────
+        "--collect-all",  "pikepdf",
+        "--collect-all",  "pyhanko",
+        "--hidden-import", "pyhanko_certvalidator",
+        "--hidden-import", "cryptography",
+        # ── 匯出 / 轉換 ───────────────────────────────────────
+        "--hidden-import", "openpyxl",
+        "--hidden-import", "pptx",
+        "--hidden-import", "docx",
+        "--hidden-import", "reportlab",
+        "--hidden-import", "reportlab.graphics",
+        # ── OCR / 圖像 ────────────────────────────────────────
+        "--hidden-import", "pytesseract",
+        "--hidden-import", "PIL",
+        "--hidden-import", "PIL.Image",
+        # ── macOS Vision / Quartz（pyobjc，系統框架）────────────
+        "--hidden-import", "Vision",
+        "--hidden-import", "Quartz",
+        "--hidden-import", "Foundation",
+        # ── 自動標籤（stdlib，保險起見列出）─────────────────────
+        "--hidden-import", "urllib.request",
+        "--hidden-import", "xml.etree.ElementTree",
     ]
 
     # 圖示
