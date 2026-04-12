@@ -41,7 +41,13 @@ def run(cmd: list[str], **kw):
     subprocess.run(cmd, check=True, **kw)
 
 
-def build(onefile: bool, sign_id: str | None):
+def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
+    # ── 前置檢查 ─────────────────────────────────────────
+    if not skip_preflight:
+        from build_preflight import run_preflight
+        if not run_preflight():
+            sys.exit(1)
+
     # ── 清理舊產物 ───────────────────────────────────────
     for d in (DIST / APP_NAME, DIST / f"{APP_NAME}.app",
               BUILD / APP_NAME, BUILD / "main"):
@@ -178,5 +184,7 @@ if __name__ == "__main__":
                         help="打包成單一執行檔（較慢）")
     parser.add_argument("--sign",    metavar="IDENTITY", default=None,
                         help='程式碼簽署身分，例如 "Developer ID Application: ..."')
+    parser.add_argument("--skip-preflight", action="store_true",
+                        help="跳過前置檢查（已確認環境正確時使用）")
     args = parser.parse_args()
-    build(args.onefile, args.sign)
+    build(args.onefile, args.sign, skip_preflight=args.skip_preflight)

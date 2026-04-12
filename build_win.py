@@ -40,7 +40,14 @@ def run(cmd: list[str], **kw):
     subprocess.run(cmd, check=True, **kw)
 
 
-def build(onefile: bool, use_upx: bool, sign_cert: str | None, sign_pass: str | None):
+def build(onefile: bool, use_upx: bool, sign_cert: str | None, sign_pass: str | None,
+          skip_preflight: bool = False):
+    # ── 前置檢查 ─────────────────────────────────────────
+    if not skip_preflight:
+        from build_preflight import run_preflight
+        if not run_preflight():
+            sys.exit(1)
+
     # ── 清理舊產物 ───────────────────────────────────────
     for d in (DIST / APP_NAME, BUILD / APP_NAME, BUILD / "main"):
         shutil.rmtree(d, ignore_errors=True)
@@ -211,13 +218,16 @@ def _make_zip():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build AcroPDF for Windows")
-    parser.add_argument("--onefile",   action="store_true",
+    parser.add_argument("--onefile",       action="store_true",
                         help="打包成單一 EXE（較慢啟動）")
-    parser.add_argument("--upx",       action="store_true",
+    parser.add_argument("--upx",           action="store_true",
                         help="使用 UPX 壓縮（縮減體積）")
-    parser.add_argument("--sign",      metavar="CERT.PFX", default=None,
+    parser.add_argument("--sign",          metavar="CERT.PFX", default=None,
                         help="Authenticode 憑證檔案路徑（.pfx）")
-    parser.add_argument("--sign-pass", metavar="PASSWORD",  default=None,
+    parser.add_argument("--sign-pass",     metavar="PASSWORD",  default=None,
                         help="憑證密碼")
+    parser.add_argument("--skip-preflight", action="store_true",
+                        help="跳過前置檢查（已確認環境正確時使用）")
     args = parser.parse_args()
-    build(args.onefile, args.upx, args.sign, args.sign_pass)
+    build(args.onefile, args.upx, args.sign, args.sign_pass,
+          skip_preflight=args.skip_preflight)
