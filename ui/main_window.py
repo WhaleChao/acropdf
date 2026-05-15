@@ -469,6 +469,11 @@ class MainWindow(QMainWindow):
         self._add_action(export_menu, "儲存為 PDF/A...", lambda: self._export("pdfa"))
         self._add_action(export_menu, "匯出為 PDF/X...", self._export_pdfx_dialog)
 
+        # ── 說明 ──────────────────────────────────
+        help_menu = mb.addMenu("說明(&H)")
+        self._add_action(help_menu, "匯出診斷資料...", self._export_diagnostics)
+        self._add_action(help_menu, "關於 AcroPDF", self._about_dialog)
+
     def _add_action(self, menu, text: str, slot, shortcut: str = None) -> QAction:
         act = QAction(text, self)
         if shortcut:
@@ -476,6 +481,40 @@ class MainWindow(QMainWindow):
         act.triggered.connect(slot)
         menu.addAction(act)
         return act
+
+    def _export_diagnostics(self):
+        from core.diagnostics import default_diagnostics_path, export_diagnostics
+        from main import APP_VERSION
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "匯出診斷資料",
+            str(default_diagnostics_path()),
+            "ZIP 壓縮檔 (*.zip)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        try:
+            out = export_diagnostics(path, APP_VERSION)
+            QMessageBox.information(self, "匯出完成", f"診斷資料已儲存至：\n{out}")
+        except Exception as exc:
+            QMessageBox.warning(self, "匯出失敗", f"無法匯出診斷資料：\n{exc}")
+
+    def _about_dialog(self):
+        from main import APP_NAME, APP_PUBLISHER, APP_VERSION
+
+        QMessageBox.about(
+            self,
+            f"關於 {APP_NAME}",
+            (
+                f"<b>{APP_NAME}</b><br>"
+                f"版本：{APP_VERSION}<br>"
+                f"發行者：{APP_PUBLISHER}<br><br>"
+                "單機版 PDF 編輯工具。"
+            ),
+        )
 
     def _setup_toolbar(self):
         tb = self.addToolBar("工具列")

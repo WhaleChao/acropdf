@@ -24,6 +24,7 @@ import sys
 import shutil
 import subprocess
 import argparse
+import hashlib
 from pathlib import Path
 
 BASE   = Path(__file__).parent.resolve()
@@ -233,6 +234,15 @@ def _write_info_plist_strings(app_path: Path):
 
 def _make_dmg(app_path: Path):
     dmg_out = DIST / f"{APP_NAME}.dmg"
+    staging = DIST / "_dmg_staging"
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(exist_ok=True)
+    shutil.copytree(app_path, staging / app_path.name, dirs_exist_ok=True)
+    unblock_script = BASE / "scripts" / "unblock_acropdf_macos.command"
+    if unblock_script.exists():
+        target_script = staging / "解除 macOS 安全限制.command"
+        shutil.copy2(unblock_script, target_script)
+        target_script.chmod(0o755)
 
     # 優先用 create-dmg（較美觀）
     if shutil.which("create-dmg"):
@@ -246,18 +256,17 @@ def _make_dmg(app_path: Path):
                 "--background", str(BASE / "resources" / "dmg_bg.png")
                     if (BASE / "resources" / "dmg_bg.png").exists() else "",
                 str(dmg_out),
-                str(app_path),
+                str(staging),
             ])
+            shutil.rmtree(staging)
             print(f"✅  DMG 建立完成：{dmg_out}")
+            _write_checksum(dmg_out)
             return
         except subprocess.CalledProcessError:
             pass
 
     # fallback：用 hdiutil
     try:
-        staging = DIST / "_dmg_staging"
-        staging.mkdir(exist_ok=True)
-        shutil.copytree(app_path, staging / app_path.name, dirs_exist_ok=True)
         run([
             "hdiutil", "create",
             "-volname", APP_NAME,
@@ -267,8 +276,19 @@ def _make_dmg(app_path: Path):
         ])
         shutil.rmtree(staging)
         print(f"✅  DMG 建立完成：{dmg_out}")
+        _write_checksum(dmg_out)
     except subprocess.CalledProcessError as e:
         print(f"⚠️   DMG 建立失敗（{e}），跳過")
+
+
+def _write_checksum(path: Path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    out = path.with_suffix(path.suffix + ".sha256")
+    out.write_text(f"{digest.hexdigest()}  {path.name}\n", encoding="utf-8")
+    print(f"✅  SHA256 建立完成：{out}")
 
 
 # ════════════════════════════════════════════════════════════

@@ -2,6 +2,7 @@ import fitz
 import os
 import tempfile
 import time
+import zipfile
 from unittest.mock import patch
 
 import acro_platform
@@ -10,6 +11,7 @@ import pytest
 from PyQt6.QtPrintSupport import QPrinter
 from core.compare_engine import CompareEngine
 from core.dependency_manager import DependencyManager
+from core.diagnostics import export_diagnostics, write_runtime_event
 from core.document import PDFDocument
 from core.temp_manager import cleanup_temp_files
 from ui.dialogs.compare.compare_dialog import CompareDialog
@@ -91,6 +93,18 @@ def test_temp_cleanup_removes_old_files(tmp_path):
     assert not os.path.exists(stale)
 
 
+def test_diagnostics_export_creates_support_zip(tmp_path, monkeypatch):
+    monkeypatch.setenv("ACROPDF_APP_DATA_DIR", str(tmp_path / "appdata"))
+    write_runtime_event("test_event")
+    out = export_diagnostics(tmp_path / "diagnostics.zip", "9.9.9")
+
+    assert out.exists()
+    with zipfile.ZipFile(out) as zf:
+        names = set(zf.namelist())
+        assert "diagnostics.json" in names
+        assert "logs/runtime.log" in names
+
+
 def test_main_window_and_dialogs_smoke(qapp, sample_pdf):
     window = MainWindow()
     window.open_file(str(sample_pdf))
@@ -101,6 +115,7 @@ def test_main_window_and_dialogs_smoke(qapp, sample_pdf):
     assert window._save_as_action.text() == "另存新檔"
     assert window._close_pdf_btn.text() == "關閉 PDF"
     assert window._close_pdf_btn.isEnabled()
+    assert any(action.text() == "說明(&H)" for action in window.menuBar().actions())
     assert [label for label, _ in window._side_pages] == ["案件", "工具", "縮圖", "書籤"]
     assert window._left_panel.minimumWidth() >= 300
     for idx, expected in enumerate(["案件", "工具", "縮圖", "書籤"]):

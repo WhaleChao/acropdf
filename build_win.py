@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import argparse
 import re
+import hashlib
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -162,6 +163,7 @@ def build(onefile: bool, use_upx: bool, sign_cert: str | None, sign_pass: str | 
     # ── 建立 ZIP 壓縮包（資料夾模式）───────────────────
     if not onefile and (DIST / APP_NAME).is_dir():
         _make_zip()
+        _make_installer()
 
 
 def _write_version_file() -> str:
@@ -262,8 +264,48 @@ def _make_zip():
     try:
         shutil.make_archive(str(out), "zip", str(DIST), APP_NAME)
         print(f"✅  ZIP 建立完成：{out}.zip")
+        _write_checksum(Path(f"{out}.zip"))
     except Exception as e:
         print(f"⚠️   ZIP 建立失敗：{e}")
+
+
+def _make_installer():
+    """若有 Inno Setup，建立 Windows 安裝程式。"""
+    iscc = shutil.which("ISCC.exe") or shutil.which("ISCC")
+    if not iscc:
+        candidates = [
+            r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            r"C:\Program Files\Inno Setup 6\ISCC.exe",
+        ]
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                iscc = candidate
+                break
+    if not iscc:
+        print("ℹ️  找不到 Inno Setup，略過 Windows 安裝程式")
+        return
+
+    iss = BASE / "installer" / "AcroPDF.iss"
+    if not iss.exists():
+        print("⚠️   找不到 Inno Setup 腳本，略過 Windows 安裝程式")
+        return
+
+    version = _app_version()
+    run([iscc, f"/DMyAppVersion={version}", str(iss)])
+    installer = DIST / "AcroPDF_Setup.exe"
+    if installer.exists():
+        print(f"✅  Windows 安裝程式建立完成：{installer}")
+        _write_checksum(installer)
+
+
+def _write_checksum(path: Path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    out = path.with_suffix(path.suffix + ".sha256")
+    out.write_text(f"{digest.hexdigest()}  {path.name}\n", encoding="utf-8")
+    print(f"✅  SHA256 建立完成：{out}")
 
 
 # ════════════════════════════════════════════════════════════

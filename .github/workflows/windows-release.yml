@@ -31,6 +31,7 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
+          choco install innosetup --no-progress -y
           python -m pip install --upgrade pip
           python -m pip install -r requirements_win.txt
           python -m pip install pyinstaller pytest
@@ -54,13 +55,20 @@ jobs:
           if (!(Test-Path dist/AcroPDF_win.zip)) {
             throw "Missing dist/AcroPDF_win.zip"
           }
+          if (!(Test-Path dist/AcroPDF_Setup.exe)) {
+            throw "Missing dist/AcroPDF_Setup.exe"
+          }
           Get-ChildItem dist | Format-Table Name, Length
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: AcroPDF-Windows
-          path: dist/AcroPDF_win.zip
+          path: |
+            dist/AcroPDF_win.zip
+            dist/AcroPDF_win.zip.sha256
+            dist/AcroPDF_Setup.exe
+            dist/AcroPDF_Setup.exe.sha256
           if-no-files-found: error
 
       - name: Upload to GitHub Release
@@ -74,4 +82,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --repo $env:GITHUB_REPOSITORY --title "AcroPDF $tag" --notes "AcroPDF release package."
           }
-          gh release upload $tag dist/AcroPDF_win.zip --repo $env:GITHUB_REPOSITORY --clobber
+          gh release upload $tag dist/AcroPDF_win.zip dist/AcroPDF_win.zip.sha256 dist/AcroPDF_Setup.exe dist/AcroPDF_Setup.exe.sha256 --repo $env:GITHUB_REPOSITORY --clobber

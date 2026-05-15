@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QLocale, QTranslator, QLibraryInfo, QEvent
 from PyQt6.QtGui import QIcon, QFileOpenEvent
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.0.15"
+APP_VERSION = "1.0.16"
 APP_PUBLISHER = "WhaleChao"
 
 def _state_file_path() -> Path:
@@ -76,6 +76,11 @@ class _AcroPDFApp(QApplication):
 
 
 def main():
+    from core.diagnostics import cleanup_old_logs, install_excepthook, write_runtime_event
+    cleanup_old_logs()
+    install_excepthook(APP_VERSION)
+    write_runtime_event("app_start", version=APP_VERSION)
+
     # HiDPI 設定（必須在 QApplication 之前）
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
@@ -127,6 +132,7 @@ def main():
                 pass
 
     code = app.exec()
+    write_runtime_event("app_exit", code=code, version=APP_VERSION)
     _write_state(None)   # 正常退出時清空狀態
     sys.exit(code)
 
