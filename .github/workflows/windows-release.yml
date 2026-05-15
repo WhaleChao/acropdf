@@ -1,0 +1,74 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows package
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements_win.txt
+          python -m pip install pyinstaller pytest
+
+      - name: Run tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q
+
+      - name: Build Windows package
+        shell: pwsh
+        run: python build_win.py --skip-preflight
+
+      - name: Verify package
+        shell: pwsh
+        run: |
+          if (!(Test-Path dist/AcroPDF/AcroPDF.exe)) {
+            throw "Missing dist/AcroPDF/AcroPDF.exe"
+          }
+          if (!(Test-Path dist/AcroPDF_win.zip)) {
+            throw "Missing dist/AcroPDF_win.zip"
+          }
+          Get-ChildItem dist | Format-Table Name, Length
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcroPDF-Windows
+          path: dist/AcroPDF_win.zip
+          if-no-files-found: error
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --title "AcroPDF $tag" --notes "AcroPDF release package."
+          }
+          gh release upload $tag dist/AcroPDF_win.zip --repo $env:GITHUB_REPOSITORY --clobber

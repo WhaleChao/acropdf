@@ -32,7 +32,7 @@ BUILD  = BASE / "build"
 ICON   = BASE / "resources" / "icons" / "acropdf.icns"
 
 APP_NAME    = "AcroPDF"
-BUNDLE_ID   = "com.youroffice.acropdf"
+BUNDLE_ID   = "com.whalechao.acropdf"
 ENTRY_POINT = str(BASE / "main.py")
 
 
@@ -147,13 +147,16 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
 
     # ── 程式碼簽署（選用）───────────────────────────────
     if sign_id:
-        run([
+        sign_cmd = [
             "codesign",
             "--deep", "--force", "--options", "runtime",
             "--sign", sign_id,
-            "--entitlements", str(BASE / "resources" / "entitlements.plist"),
-            str(app_path),
-        ])
+        ]
+        entitlements = BASE / "resources" / "entitlements.plist"
+        if entitlements.exists():
+            sign_cmd += ["--entitlements", str(entitlements)]
+        sign_cmd.append(str(app_path))
+        run(sign_cmd)
         run(["codesign", "--verify", "--deep", "--strict", str(app_path)])
         print("✅  程式碼簽署完成")
 

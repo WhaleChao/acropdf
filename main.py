@@ -8,7 +8,8 @@ from PyQt6.QtCore import Qt, QLocale, QTranslator, QLibraryInfo, QEvent
 from PyQt6.QtGui import QIcon, QFileOpenEvent
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.0.11"
+APP_VERSION = "1.0.12"
+APP_PUBLISHER = "WhaleChao"
 
 def _state_file_path() -> Path:
     """回傳 loader 狀態檔位置；正式 app 不可寫入已簽章的 bundle。"""
@@ -83,7 +84,7 @@ def main():
     app = _AcroPDFApp(sys.argv)
     QLocale.setDefault(QLocale(QLocale.Language.Chinese, QLocale.Country.Taiwan))
     app.setApplicationName(APP_NAME)
-    app.setOrganizationName("YourOffice")
+    app.setOrganizationName(APP_PUBLISHER)
     app.setApplicationVersion(APP_VERSION)
 
     # 載入 Qt 繁體中文翻譯（列印對話框等原生 UI 元件）

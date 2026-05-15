@@ -3,12 +3,14 @@ from PyQt6.QtCore import QSettings
 from app.constants import LayoutMode, DEFAULT_ZOOM
 
 class Config:
+    ORG_NAME = "WhaleChao"
+    APP_NAME = "AcroPDF"
     _instance = None
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._settings = QSettings("YourOffice", "AcroPDF")
+            cls._instance._settings = QSettings(cls.ORG_NAME, cls.APP_NAME)
         return cls._instance
 
     def get(self, key: str, default=None):

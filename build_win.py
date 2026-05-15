@@ -24,6 +24,7 @@ import sys
 import shutil
 import subprocess
 import argparse
+import re
 from pathlib import Path
 
 BASE   = Path(__file__).parent.resolve()
@@ -32,6 +33,7 @@ BUILD  = BASE / "build"
 ICON   = BASE / "resources" / "icons" / "acropdf.ico"
 
 APP_NAME    = "AcroPDF"
+APP_PUBLISHER = "WhaleChao"
 ENTRY_POINT = str(BASE / "main.py")
 
 
@@ -159,11 +161,13 @@ def build(onefile: bool, use_upx: bool, sign_cert: str | None, sign_pass: str | 
 
 def _write_version_file() -> str:
     """產生 PyInstaller 版本資訊檔（Windows VERSIONINFO resource）。"""
-    content = """
+    version = _app_version()
+    file_version = _version_tuple(version)
+    content = f"""
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 2, 0),
-    prodvers=(1, 0, 2, 0),
+    filevers={file_version},
+    prodvers={file_version},
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -174,14 +178,14 @@ VSVersionInfo(
   kids=[
     StringFileInfo([
       StringTable(u'040404b0', [
-        StringStruct(u'CompanyName',      u'YourOffice'),
+        StringStruct(u'CompanyName',      u'{APP_PUBLISHER}'),
         StringStruct(u'FileDescription',  u'AcroPDF - PDF Editor'),
-        StringStruct(u'FileVersion',      u'1.0.2.0'),
+        StringStruct(u'FileVersion',      u'{version}'),
         StringStruct(u'InternalName',     u'AcroPDF'),
-        StringStruct(u'LegalCopyright',   u'\\xa9 2026 YourOffice'),
+        StringStruct(u'LegalCopyright',   u'\\xa9 2026 {APP_PUBLISHER}'),
         StringStruct(u'OriginalFilename', u'AcroPDF.exe'),
         StringStruct(u'ProductName',      u'AcroPDF'),
-        StringStruct(u'ProductVersion',   u'1.0.2.0'),
+        StringStruct(u'ProductVersion',   u'{version}'),
       ])
     ]),
     VarFileInfo([VarStruct(u'Translation', [0x0404, 0x04b0])])
@@ -192,6 +196,28 @@ VSVersionInfo(
     ver_file.parent.mkdir(exist_ok=True)
     ver_file.write_text(content, encoding="utf-8")
     return str(ver_file)
+
+
+def _app_version() -> str:
+    """從 main.py 讀取單一版本來源，避免 Windows metadata 落後。"""
+    try:
+        main_text = (BASE / "main.py").read_text(encoding="utf-8")
+        m = re.search(r'APP_VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', main_text)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return "1.0.0"
+
+
+def _version_tuple(version: str) -> tuple[int, int, int, int]:
+    parts: list[int] = []
+    for part in version.split("."):
+        try:
+            parts.append(int(part))
+        except ValueError:
+            parts.append(0)
+    return tuple((parts + [0, 0, 0, 0])[:4])
 
 
 def _sign(exe_path: Path, cert: str, password: str | None):
