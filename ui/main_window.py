@@ -491,6 +491,10 @@ class MainWindow(QMainWindow):
         save_act.setToolTip("儲存目前文件")
         save_act.triggered.connect(self.save)
         tb.addAction(save_act)
+        self._save_as_action = QAction("另存新檔", self)
+        self._save_as_action.setToolTip("另存新檔（Ctrl+Shift+S）")
+        self._save_as_action.triggered.connect(self.save_as)
+        tb.addAction(self._save_as_action)
         self._close_pdf_btn = QPushButton("關閉 PDF")
         self._close_pdf_btn.setObjectName("closePdfButton")
         self._close_pdf_btn.setToolTip("關閉目前 PDF（Ctrl+W）")
@@ -1238,6 +1242,7 @@ class MainWindow(QMainWindow):
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         printer.setDocName(doc.display_name)
         printer.setCopyCount(settings.copies)
+        printer.setDuplex(settings.duplex_mode)
         if settings.output_pdf_path:
             printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
             printer.setOutputFileName(settings.output_pdf_path)

@@ -252,6 +252,7 @@ class AnnotSummaryDialog(QDialog):
             return
         settings = dlg.settings()
         printer.setCopyCount(settings.copies)
+        printer.setDuplex(settings.duplex_mode)
         if settings.output_pdf_path:
             printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
             printer.setOutputFileName(settings.output_pdf_path)

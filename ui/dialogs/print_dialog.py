@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtPrintSupport import QPrinterInfo
+from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -29,6 +29,7 @@ class PrintSettings:
     printer_name: str
     page_indices: list[int]
     copies: int
+    duplex_mode: QPrinter.DuplexMode = QPrinter.DuplexMode.DuplexLongSide
     output_pdf_path: str | None = None
 
 
@@ -118,6 +119,18 @@ class PrintDialog(QDialog):
         copy_form.addRow("列印份數：", self._copies)
         root.addWidget(copy_group)
 
+        duplex_group = QGroupBox("雙面列印")
+        duplex_form = QFormLayout(duplex_group)
+        self._duplex_combo = QComboBox()
+        self._duplex_combo.addItem("雙面（長邊翻頁）", QPrinter.DuplexMode.DuplexLongSide)
+        self._duplex_combo.addItem("雙面（短邊翻頁）", QPrinter.DuplexMode.DuplexShortSide)
+        self._duplex_combo.addItem("依印表機預設", QPrinter.DuplexMode.DuplexAuto)
+        self._duplex_combo.addItem("單面", QPrinter.DuplexMode.DuplexNone)
+        self._duplex_combo.setCurrentIndex(0)
+        self._pdf_check.toggled.connect(self._duplex_combo.setDisabled)
+        duplex_form.addRow("列印方式：", self._duplex_combo)
+        root.addWidget(duplex_group)
+
         root.addWidget(QLabel("頁面會依比例置中並符合可列印範圍。"))
 
         btn_row = QHBoxLayout()
@@ -165,6 +178,7 @@ class PrintDialog(QDialog):
             printer_name=printer_name,
             page_indices=pages,
             copies=self._copies.value(),
+            duplex_mode=self._duplex_combo.currentData() or QPrinter.DuplexMode.DuplexLongSide,
             output_pdf_path=output_pdf or None,
         )
         self.accept()

@@ -7,6 +7,7 @@ from unittest.mock import patch
 import acro_platform
 import platform as std_platform
 import pytest
+from PyQt6.QtPrintSupport import QPrinter
 from core.compare_engine import CompareEngine
 from core.dependency_manager import DependencyManager
 from core.document import PDFDocument
@@ -97,6 +98,7 @@ def test_main_window_and_dialogs_smoke(qapp, sample_pdf):
     doc = window._current_doc()
     assert doc is not None
     assert window._doc_tabs.count() == 1
+    assert window._save_as_action.text() == "另存新檔"
     assert window._close_pdf_btn.text() == "關閉 PDF"
     assert window._close_pdf_btn.isEnabled()
     assert [label for label, _ in window._side_pages] == ["案件", "工具", "縮圖", "書籤"]
@@ -123,6 +125,11 @@ def test_main_window_and_dialogs_smoke(qapp, sample_pdf):
 def test_print_dialog_page_range_parser():
     assert _parse_page_ranges("1-3, 5，7", 8) == [0, 1, 2, 4, 6]
     assert _parse_page_ranges("2,2,3", 4) == [1, 2]
+
+
+def test_print_dialog_defaults_to_duplex_long_side(qapp):
+    dialog = PrintDialog(3, 0)
+    assert dialog._duplex_combo.currentData() == QPrinter.DuplexMode.DuplexLongSide
 
 
 def test_thumbnail_panel_defers_pixmap_rendering(qapp, sample_pdf):

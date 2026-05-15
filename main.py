@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QLocale, QTranslator, QLibraryInfo, QEvent
 from PyQt6.QtGui import QIcon, QFileOpenEvent
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.0.10"
+APP_VERSION = "1.0.11"
 
 def _state_file_path() -> Path:
     """回傳 loader 狀態檔位置；正式 app 不可寫入已簽章的 bundle。"""
