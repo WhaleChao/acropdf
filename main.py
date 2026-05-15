@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QLocale, QTranslator, QLibraryInfo, QEvent
 from PyQt6.QtGui import QIcon, QFileOpenEvent
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.0.16"
+APP_VERSION = "1.0.17"
 APP_PUBLISHER = "WhaleChao"
 
 def _state_file_path() -> Path:

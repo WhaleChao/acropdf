@@ -27,7 +27,6 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 ChangesAssociations=yes
 
 [Languages]
-Name: "tchinese"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
