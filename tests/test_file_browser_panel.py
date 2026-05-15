@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from ui.panels.file_browser_panel import (
     FileBrowserPanel, _CaseFilterProxy, _OPENABLE_EXTS, _DEFAULT_ROOT,
+    _synology_drive_path,
 )
 
 
@@ -283,7 +284,9 @@ class TestFileOpenSignal:
             # 對非目錄且副檔名合法的檔案應發射信號
             panel._on_double_click(proxy_idx)
             assert len(received) == 1
-            assert received[0] == str(pdf_path)
+            assert os.path.normcase(os.path.normpath(received[0])) == os.path.normcase(
+                os.path.normpath(str(pdf_path))
+            )
 
     def test_double_click_folder_does_not_emit(self, qapp, tmp_path, mock_config):
         sub = tmp_path / "subdir"
@@ -376,8 +379,19 @@ class TestSynologyButton:
 # ── 預設根目錄常數 ────────────────────────────────────────────────
 
 class TestDefaults:
-    def test_default_root_points_to_01_cases(self):
-        assert "01_案件" in _DEFAULT_ROOT
+    def test_default_root_prefers_01_cases_when_synology_cases_exists(self, tmp_path):
+        synology = tmp_path / "SynologyDrive"
+        cases = synology / "01_案件"
+        cases.mkdir(parents=True)
+        with patch("ui.panels.file_browser_panel._synology_drive_path", return_value=str(synology)):
+            from ui.panels import file_browser_panel
 
-    def test_default_root_under_synology_drive(self):
-        assert "SynologyDrive" in _DEFAULT_ROOT
+            assert file_browser_panel._default_root() == str(cases)
+
+    def test_default_root_falls_back_to_home_without_synology(self):
+        if _synology_drive_path():
+            assert _DEFAULT_ROOT
+        else:
+            assert os.path.normcase(os.path.normpath(_DEFAULT_ROOT)) == os.path.normcase(
+                os.path.normpath(str(Path.home()))
+            )
