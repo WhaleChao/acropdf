@@ -14,6 +14,8 @@ class BookmarkManager:
         return self._fitz.get_toc(simple=False) if self._fitz else []
 
     def set_toc(self, toc: list):
+        if not self._fitz:
+            return
         self._doc.begin_op("更新書籤")
         self._fitz.set_toc(toc)
         self._doc.end_op()

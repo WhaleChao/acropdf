@@ -34,11 +34,11 @@ class TextBoxDialog(QDialog):
         # ── 尺寸資訊提示 ─────────────────────────────────────────────
         if self._rect_info:
             info_lbl = QLabel(self._rect_info)
-            info_lbl.setStyleSheet("color: #888; font-size: 11px;")
+            info_lbl.setStyleSheet("color: #8e8e93; font-size: 11px;")
             layout.addWidget(info_lbl)
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.HLine)
-            sep.setStyleSheet("color: #ddd;")
+            sep.setStyleSheet("color: #8e8e93;")
             layout.addWidget(sep)
 
         # ── 字體大小 row ──────────────────────────────────────────────
@@ -55,7 +55,7 @@ class TextBoxDialog(QDialog):
         size_row.addWidget(self._size_spin)
 
         detected_lbl = QLabel(f"（由頁面文字自動偵測：{self._font_size} pt）")
-        detected_lbl.setStyleSheet("color: #888; font-size: 11px;")
+        detected_lbl.setStyleSheet("color: #8e8e93; font-size: 11px;")
         size_row.addWidget(detected_lbl)
         size_row.addStretch()
         layout.addLayout(size_row)
@@ -69,15 +69,11 @@ class TextBoxDialog(QDialog):
         layout.addWidget(self._text_edit)
 
         # ── 按鈕 ─────────────────────────────────────────────────────
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok |
-            QDialogButtonBox.StandardButton.Cancel
-        )
-        btns.button(QDialogButtonBox.StandardButton.Ok).setText("插入")
-        btns.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
-        btns.accepted.connect(self.accept)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
+        from ui.dialogs._button_helper import make_ok_cancel_row
+        row, ok_btn, cancel_btn = make_ok_cancel_row(self, ok_text="插入", cancel_text="取消")
+        ok_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+        layout.addLayout(row)
 
         self._text_edit.setFocus()
 

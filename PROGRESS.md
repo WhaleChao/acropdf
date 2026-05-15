@@ -8,6 +8,16 @@
 
 ## Commit 歷史
 
+### 2026-05-05 — Desktop MD cleanup 狀態收斂
+- 原桌面 `AcroPDF_開發計劃.md` 已歸檔至 `/Users/ai/Desktop/desktop_md_archive_20260505/`。
+- 本專案不再列入 MAGI 桌面 MD 未完成項；後續以本檔追蹤產品進度。
+- 本輪驗證：`python3 -m pytest -q tests` → **89 passed, 5 warnings in 3.93s**。
+- 剩餘項目屬 AcroPDF 產品 roadmap，不是 MAGI cleanup blocker：
+  - 浮水印 / 頁首頁尾 UI 對話框 polish
+  - replace page 保留向量元素策略
+  - Windows 版實機驗證
+  - 打包後 OCR `TESSDATA_PREFIX` 路徑確認
+
 ### `5a8d0f5` — AcroPDF v1.0.1（標注工具、渲染修復、Undo/Redo）
 - 螢光筆、底線、便利貼、文字框、圖章、標記塗黑 六種標注工具
 - 修復：標注新增後不重繪（`is_modified` 分支改走同步渲染）

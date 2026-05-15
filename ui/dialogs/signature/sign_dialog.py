@@ -46,12 +46,11 @@ class SignDialog(QDialog):
         sig_form.addRow("地點：", self._location)
         layout.addWidget(sig_group)
 
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        btns.accepted.connect(self._sign)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
+        from ui.dialogs._button_helper import make_ok_cancel_row
+        row, ok_btn, cancel_btn = make_ok_cancel_row(self, ok_text="簽署", cancel_text="取消")
+        ok_btn.clicked.connect(self._sign)
+        cancel_btn.clicked.connect(self.reject)
+        layout.addLayout(row)
 
     def _browse_cert(self):
         path, _ = QFileDialog.getOpenFileName(

@@ -35,6 +35,11 @@ class PageWidget(QWidget):
         self.setFixedSize(logical_w, logical_h)
         self.update()
 
+    def clear_pixmap(self):
+        if self._pixmap is not None:
+            self._pixmap = None
+            self.update()
+
     def set_tool(self, tool):
         self._tool = tool
 
@@ -66,4 +71,3 @@ class PageWidget(QWidget):
     def mouseReleaseEvent(self, event):
         if self._tool:
             self._tool.mouse_release(self, event, event.pos())
-

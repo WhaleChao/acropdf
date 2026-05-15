@@ -19,15 +19,22 @@ class PageManager:
         doc = self._ensure_doc()
         self._doc.begin_op("旋轉頁面")
         for i in page_indices:
-            page = doc[i]
-            page.set_rotation((page.rotation + angle) % 360)
+            if 0 <= i < doc.page_count:
+                page = doc[i]
+                page.set_rotation((page.rotation + angle) % 360)
         self._doc.end_op()
         self._doc._mark_modified()
 
     def delete(self, page_indices: list[int]):
         doc = self._ensure_doc()
+        # 不能刪除所有頁面（PyMuPDF 不允許 0 頁文件）
+        valid = [i for i in page_indices if 0 <= i < doc.page_count]
+        if len(valid) >= doc.page_count:
+            raise ValueError("無法刪除所有頁面，PDF 至少需保留一頁")
+        if not valid:
+            return
         self._doc.begin_op("刪除頁面")
-        for i in sorted(page_indices, reverse=True):
+        for i in sorted(valid, reverse=True):
             doc.delete_page(i)
         self._doc.end_op()
         self._doc._mark_modified()
@@ -45,10 +52,14 @@ class PageManager:
 
     def move_page(self, from_index: int, to_index: int):
         doc = self._ensure_doc()
+        pc = doc.page_count
+        if from_index < 0 or from_index >= pc or to_index < 0 or to_index >= pc:
+            return
         self._doc.begin_op("移動頁面")
         doc.move_page(from_index, to_index)
         self._doc.end_op()
         self._doc._mark_modified()
+        self._doc.page_count_changed.emit(doc.page_count)
 
     def reorder(self, new_order: list[int]):
         """new_order: 新順序中每個位置對應的原始頁面索引"""
@@ -57,9 +68,12 @@ class PageManager:
         doc.select(new_order)
         self._doc.end_op()
         self._doc._mark_modified()
+        self._doc.page_count_changed.emit(doc.page_count)
 
     def crop(self, page_index: int, rect: fitz.Rect):
         doc = self._ensure_doc()
+        if page_index < 0 or page_index >= doc.page_count:
+            return
         self._doc.begin_op("裁切頁面")
         page = doc[page_index]
         page.set_cropbox(rect)
@@ -69,9 +83,12 @@ class PageManager:
     def merge_pdf(self, other_path: str, insert_at: int = -1):
         """將另一份 PDF 插入到指定位置（-1 = 附加到尾端）"""
         doc = self._ensure_doc()
-        self._doc.begin_op("合併 PDF")
         pos = insert_at if insert_at >= 0 else doc.page_count
-        src = fitz.open(other_path)
+        try:
+            src = fitz.open(other_path)
+        except Exception as e:
+            raise RuntimeError(f"無法開啟來源檔案：{e}") from e
+        self._doc.begin_op("合併 PDF")
         try:
             doc.insert_pdf(src, start_at=pos)
         finally:
@@ -84,14 +101,52 @@ class PageManager:
         """在指定位置插入 PDF（右鍵選單入口）"""
         self.merge_pdf(other_path, insert_at=insert_at)
 
+    def insert_file(self, file_path: str, insert_at: int = -1):
+        """插入任意支援的檔案（PDF/圖片/Word/Excel/PPTX），自動轉換後插入。"""
+        import os
+        doc = self._ensure_doc()
+        pos = insert_at if insert_at >= 0 else doc.page_count
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == '.pdf':
+            # PDF 直接用 merge_pdf（效率較好）
+            self.merge_pdf(file_path, insert_at=pos)
+            return
+
+        # 非 PDF：透過 FileConverter 轉為 fitz.Document 後插入
+        from core.file_converter import FileConverter, get_file_type
+        file_type = get_file_type(file_path)
+        if file_type is None:
+            raise ValueError(f"不支援的格式：{os.path.basename(file_path)}")
+
+        try:
+            converted = FileConverter.convert(file_path)
+        except Exception as e:
+            raise RuntimeError(f"轉換檔案失敗：{e}") from e
+
+        if converted.page_count == 0:
+            converted.close()
+            raise RuntimeError("轉換結果為空（0 頁）")
+
+        self._doc.begin_op("插入檔案")
+        try:
+            doc.insert_pdf(converted, start_at=pos)
+        finally:
+            converted.close()
+        self._doc.end_op()
+        self._doc._mark_modified()
+        self._doc.page_count_changed.emit(doc.page_count)
+
     def extract_pages(self, page_indices: list[int], output_path: str):
         """擷取指定頁面並存成新 PDF"""
         src_doc = self._ensure_doc()
         new_doc = fitz.open()
-        new_doc.insert_pdf(src_doc, from_page=0, to_page=src_doc.page_count - 1, start_at=0)
-        new_doc.select(page_indices)
-        new_doc.save(output_path, garbage=4, deflate=True)
-        new_doc.close()
+        try:
+            new_doc.insert_pdf(src_doc, from_page=0, to_page=src_doc.page_count - 1, start_at=0)
+            new_doc.select(page_indices)
+            new_doc.save(output_path, garbage=4, deflate=True)
+        finally:
+            new_doc.close()
 
     def split_by_range(self, ranges: list[tuple[int, int]], output_dir: str) -> list[str]:
         """
@@ -115,9 +170,14 @@ class PageManager:
                       opacity: float = 0.3, fontsize: float = 60,
                       color: tuple = (0.7, 0.7, 0.7)):
         doc = self._ensure_doc()
+        if not text:
+            return
+        fontsize = max(fontsize, 1)
         indices = page_indices if page_indices is not None else range(doc.page_count)
         self._doc.begin_op("加浮水印")
         for i in indices:
+            if i < 0 or i >= doc.page_count:
+                continue
             page = doc[i]
             r = page.rect
             # 使用 Shape 繪製旋轉浮水印（insert_text 不支援 45° 旋轉）
@@ -147,6 +207,8 @@ class PageManager:
         indices = page_indices if page_indices is not None else range(doc.page_count)
         self._doc.begin_op("加頁首頁尾")
         for i in indices:
+            if i < 0 or i >= doc.page_count:
+                continue
             page = doc[i]
             r = page.rect
             if header:

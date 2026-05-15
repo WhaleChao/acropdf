@@ -11,6 +11,47 @@ import subprocess
 import threading
 from pathlib import Path
 
+# ── 中文字型（reportlab 用）──────────────────────────────────────
+_CJK_FONT_NAME = "ChineseFallback"
+_CJK_FONT_REGISTERED = False
+
+def _register_cjk_font():
+    """註冊系統中文字型供 reportlab 使用（新細明體 → 宋體 → 蘋方）。"""
+    global _CJK_FONT_REGISTERED, _CJK_FONT_NAME
+    if _CJK_FONT_REGISTERED:
+        return _CJK_FONT_NAME
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    # 候選字型（按優先順序）
+    candidates = [
+        ("/Library/Fonts/Microsoft/PMingLiU.ttf", "PMingLiU"),
+        ("/Library/Fonts/PMingLiU.ttf", "PMingLiU"),
+        ("/System/Library/Fonts/Supplemental/Songti.ttc", "Songti"),
+        ("/System/Library/Fonts/PingFang.ttc", "PingFang"),
+        ("/System/Library/Fonts/STHeiti Light.ttc", "STHeiti"),
+    ]
+    # Windows
+    if sys.platform == "win32":
+        winfonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+        candidates = [
+            (os.path.join(winfonts, "mingliu.ttc"), "PMingLiU"),
+            (os.path.join(winfonts, "simsun.ttc"), "SimSun"),
+            (os.path.join(winfonts, "msyh.ttc"), "MSYaHei"),
+        ] + candidates
+    for font_path, name in candidates:
+        if os.path.isfile(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont(name, font_path, subfontIndex=0))
+                _CJK_FONT_NAME = name
+                _CJK_FONT_REGISTERED = True
+                return name
+            except Exception:
+                continue
+    # 全部找不到 → 回退 Helvetica（中文會變方塊）
+    _CJK_FONT_REGISTERED = True
+    _CJK_FONT_NAME = "Helvetica"
+    return "Helvetica"
+
 # 支援的副檔名 → 類型分組
 SUPPORTED_EXTS = {
     # PDF 族
@@ -41,12 +82,24 @@ class FileConverter:
     def image_to_fitz(path: str) -> fitz.Document:
         """JPEG/PNG/BMP 等 → fitz.Document（單頁）"""
         doc = fitz.open()               # 空 PDF
-        img_doc = fitz.open(path)       # fitz 自動辨識圖片格式
-        # 把圖片嵌入成一頁 PDF
+        try:
+            img_doc = fitz.open(path)    # fitz 自動辨識圖片格式
+        except Exception:
+            return doc  # 損壞或不支援的圖片，回傳空文件
+        if img_doc.page_count == 0:
+            img_doc.close()
+            return doc
         rect = img_doc[0].rect
-        page = doc.new_page(width=rect.width, height=rect.height)
-        page.show_pdf_page(page.rect, img_doc, 0)
-        img_doc.close()
+        w = max(rect.width, 1)
+        h = max(rect.height, 1)
+        page = doc.new_page(width=w, height=h)
+        # 如果 fitz 能直接當 PDF 使用就用 show_pdf_page，否則用 insert_image
+        if img_doc.is_pdf:
+            page.show_pdf_page(page.rect, img_doc, 0)
+            img_doc.close()
+        else:
+            img_doc.close()
+            page.insert_image(page.rect, filename=path)
         return doc
 
     # ── Excel（openpyxl → 逐格渲染）──────────────────────────────
@@ -64,6 +117,7 @@ class FileConverter:
         from reportlab.pdfgen import canvas as rl_canvas
         import io
 
+        cjk = _register_cjk_font()
         wb = openpyxl.load_workbook(path, data_only=True)
         doc = fitz.open()
 
@@ -71,12 +125,12 @@ class FileConverter:
             buf = io.BytesIO()
             c = rl_canvas.Canvas(buf, pagesize=A4)
             W, H = A4
-            c.setFont("Helvetica", 8)
+            c.setFont(cjk, 8)
 
             # 頁面標題
-            c.setFont("Helvetica-Bold", 10)
+            c.setFont(cjk, 10)
             c.drawString(30, H - 30, f"工作表：{sheet.title}")
-            c.setFont("Helvetica", 8)
+            c.setFont(cjk, 8)
 
             y = H - 50
             col_width = min(80, (W - 60) / max(sheet.max_column or 1, 1))
@@ -89,7 +143,7 @@ class FileConverter:
             for row in sheet.iter_rows(values_only=True):
                 if y < 40:
                     c.showPage()
-                    c.setFont("Helvetica", 8)
+                    c.setFont(cjk, 8)
                     y = H - 30
                 x = 30
                 for cell in row:
@@ -118,17 +172,26 @@ class FileConverter:
         # Fallback：python-docx 純文字渲染
         from docx import Document as DocxDoc
         from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas as rl_canvas
-        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
         import io
 
+        cjk = _register_cjk_font()
         word = DocxDoc(path)
         buf = io.BytesIO()
         pdf_doc = SimpleDocTemplate(buf, pagesize=A4,
                                     rightMargin=40, leftMargin=40,
                                     topMargin=40, bottomMargin=40)
-        styles = getSampleStyleSheet()
+        base_styles = getSampleStyleSheet()
+        # 替換預設字型為中文字型
+        styles = {
+            "Normal": ParagraphStyle("Normal_CJK", parent=base_styles["Normal"],
+                                     fontName=cjk, fontSize=10, leading=14),
+            "Heading1": ParagraphStyle("H1_CJK", parent=base_styles["Heading1"],
+                                       fontName=cjk, fontSize=16, leading=20),
+            "Heading2": ParagraphStyle("H2_CJK", parent=base_styles["Heading2"],
+                                       fontName=cjk, fontSize=13, leading=17),
+        }
         story = []
 
         for para in word.paragraphs:
@@ -145,8 +208,11 @@ class FileConverter:
             story.append(Spacer(1, 4))
 
         # 表格
+        tbl_style = ParagraphStyle("Tbl_CJK", fontName=cjk, fontSize=8, leading=10)
         for table in word.tables:
-            data = [[cell.text for cell in row.cells] for row in table.rows]
+            data = []
+            for row in table.rows:
+                data.append([Paragraph(cell.text or "", tbl_style) for cell in row.cells])
             if data:
                 tbl = Table(data, repeatRows=1)
                 story.append(tbl)
@@ -177,13 +243,14 @@ class FileConverter:
 
         for slide_num, slide in enumerate(prs.slides):
             page = doc.new_page(width=slide_w, height=slide_h)
-            # 渲染文字內容
+            # 渲染文字內容（使用 PyMuPDF 內建繁中字型）
             y = 40
             for shape in slide.shapes:
                 if hasattr(shape, "text") and shape.text.strip():
                     page.insert_text(
                         fitz.Point(20, y),
                         shape.text[:200],
+                        fontname="china-t",
                         fontsize=10,
                         color=(0, 0, 0),
                     )
@@ -218,12 +285,23 @@ class FileConverter:
                 **run_kwargs,
             )
             if result.returncode != 0:
+                import shutil
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 return None
             # 找轉出的 PDF
             base = os.path.splitext(os.path.basename(path))[0]
             pdf_path = os.path.join(tmp_dir, base + ".pdf")
-            return pdf_path if os.path.isfile(pdf_path) else None
+            if not os.path.isfile(pdf_path):
+                import shutil
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                return None
+            return pdf_path
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+            try:
+                import shutil
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
             return None
 
     @staticmethod

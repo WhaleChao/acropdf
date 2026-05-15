@@ -80,7 +80,16 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
         "--collect-all",  "pymupdf_fonts",
         # ── PDF 安全 / 簽章 ───────────────────────────────────
         "--collect-all",  "pikepdf",
-        "--collect-all",  "pyhanko",
+        # pyhanko: 只匯入實際用到的模組，避免 collect-all 拉進
+        # torch/transformers/scipy 等巨型無關套件
+        "--hidden-import", "pyhanko",
+        "--hidden-import", "pyhanko.sign",
+        "--hidden-import", "pyhanko.sign.signers",
+        "--hidden-import", "pyhanko.sign.fields",
+        "--hidden-import", "pyhanko.sign.validation",
+        "--hidden-import", "pyhanko.pdf_utils",
+        "--hidden-import", "pyhanko.pdf_utils.reader",
+        "--hidden-import", "pyhanko.pdf_utils.incremental_writer",
         "--hidden-import", "pyhanko_certvalidator",
         "--hidden-import", "cryptography",
         # ── 匯出 / 轉換 ───────────────────────────────────────
@@ -100,6 +109,18 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
         # ── 自動標籤（stdlib，保險起見列出）─────────────────────
         "--hidden-import", "urllib.request",
         "--hidden-import", "xml.etree.ElementTree",
+        # ── 排除不需要的巨型套件（防止被間接拉入）──────────────
+        "--exclude-module", "torch",
+        "--exclude-module", "transformers",
+        "--exclude-module", "scipy",
+        "--exclude-module", "tensorflow",
+        "--exclude-module", "tensorboard",
+        "--exclude-module", "onnxruntime",
+        "--exclude-module", "pytest",
+        "--exclude-module", "sympy",
+        "--exclude-module", "IPython",
+        "--exclude-module", "notebook",
+        "--exclude-module", "matplotlib",
     ]
 
     # 圖示
@@ -118,6 +139,10 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
     run(args)
 
     app_path = DIST / f"{APP_NAME}.app"
+
+    # ── 補充 Info.plist：加入 PDF 檔案類型支援 ─────────────
+    _patch_info_plist(app_path)
+
     print(f"\n✅  打包完成：{app_path}")
 
     # ── 程式碼簽署（選用）───────────────────────────────
@@ -134,6 +159,73 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
 
     # ── 建立 DMG（選用，需要 create-dmg 或 hdiutil）────────
     _make_dmg(app_path)
+
+
+def _patch_info_plist(app_path: Path):
+    """在 Info.plist 加入 CFBundleDocumentTypes，讓 Finder 知道可以開 PDF。"""
+    import plistlib
+    import re
+    plist_path = app_path / "Contents" / "Info.plist"
+    if not plist_path.exists():
+        return
+    with open(plist_path, "rb") as f:
+        plist = plistlib.load(f)
+    version = "1.0.0"
+    try:
+        main_text = (BASE / "main.py").read_text(encoding="utf-8")
+        m = re.search(r'APP_VERSION\s*=\s*[\'"]([^\'"]+)[\'"]', main_text)
+        if m:
+            version = m.group(1)
+    except OSError:
+        pass
+    plist["CFBundleShortVersionString"] = version
+    plist["CFBundleVersion"] = version
+    plist["CFBundleDevelopmentRegion"] = "zh_TW"
+    plist["CFBundleLocalizations"] = ["zh_TW", "zh-Hant", "en"]
+    plist["CFBundleAllowMixedLocalizations"] = True
+    plist["CFBundleDocumentTypes"] = [
+        {
+            "CFBundleTypeName": "PDF 文件",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["com.adobe.pdf"],
+            "CFBundleTypeExtensions": ["pdf"],
+            "CFBundleTypeIconFile": "acropdf.icns",
+        },
+        {
+            "CFBundleTypeName": "圖片",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+                "public.png", "public.jpeg", "public.tiff", "com.microsoft.bmp",
+            ],
+            "CFBundleTypeExtensions": ["png", "jpg", "jpeg", "tiff", "tif", "bmp"],
+        },
+    ]
+    # 重新簽名需要的欄位
+    plist.setdefault("NSHighResolutionCapable", True)
+    with open(plist_path, "wb") as f:
+        plistlib.dump(plist, f)
+    _write_info_plist_strings(app_path)
+    # 重新 ad-hoc 簽名（修改 Info.plist 會使舊簽名失效）
+    subprocess.run(
+        ["codesign", "--deep", "--force", "--sign", "-", str(app_path)],
+        capture_output=True,
+    )
+
+
+def _write_info_plist_strings(app_path: Path):
+    """補齊繁中 Bundle 資源，讓 macOS 原生面板可採用繁體中文語系。"""
+    resources = app_path / "Contents" / "Resources"
+    zh_dir = resources / "zh_TW.lproj"
+    zh_dir.mkdir(parents=True, exist_ok=True)
+    strings = (
+        'CFBundleDisplayName = "AcroPDF";\n'
+        'CFBundleName = "AcroPDF";\n'
+        'PDF Document = "PDF 文件";\n'
+        'Image = "圖片";\n'
+    )
+    (zh_dir / "InfoPlist.strings").write_text(strings, encoding="utf-16")
 
 
 def _make_dmg(app_path: Path):

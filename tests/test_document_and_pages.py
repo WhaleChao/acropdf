@@ -47,6 +47,24 @@ def test_document_can_open_image_via_converter(tmp_path):
     assert doc.display_name == image_path.name
 
 
+def test_document_open_encrypted_pdf_requires_password(tmp_path):
+    path = tmp_path / "encrypted.pdf"
+    src = fitz.open()
+    src.new_page().insert_text((72, 72), "Protected")
+    src.save(
+        path,
+        encryption=fitz.PDF_ENCRYPT_AES_256,
+        owner_pw="owner",
+        user_pw="user",
+    )
+    src.close()
+
+    doc = PDFDocument()
+    assert not doc.open(str(path))
+    assert doc.open(str(path), password="user")
+    assert doc.page_count == 1
+
+
 def test_extract_and_split_pages(sample_pdf, tmp_path):
     doc = PDFDocument()
     assert doc.open(str(sample_pdf))

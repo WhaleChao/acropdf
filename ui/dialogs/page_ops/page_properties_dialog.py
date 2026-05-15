@@ -17,7 +17,10 @@ class PagePropertiesDialog(QDialog):
         layout.setSpacing(8)
 
         for idx in indices[:5]:  # 最多顯示 5 頁
-            page = doc.fitz_doc[idx]
+            fd = doc.fitz_doc
+            if fd is None or idx < 0 or idx >= fd.page_count:
+                continue
+            page = fd[idx]
             r = page.rect
             frame = QFrame()
             frame.setFrameShape(QFrame.Shape.StyledPanel)

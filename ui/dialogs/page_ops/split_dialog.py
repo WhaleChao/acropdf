@@ -115,7 +115,11 @@ class SplitDialog(QDialog):
             else:
                 # 依輸入點
                 text = self._split_edit.text().strip()
-                points = [int(x.strip()) for x in text.split(",") if x.strip()]
+                try:
+                    points = [int(x.strip()) for x in text.split(",") if x.strip()]
+                except ValueError:
+                    QMessageBox.warning(self, "錯誤", "請輸入有效的頁碼數字（以逗號分隔）")
+                    return
                 points = sorted(set(points))
                 boundaries = [0] + points + [self._doc.page_count]
                 ranges = [(boundaries[i], boundaries[i+1] - 1)

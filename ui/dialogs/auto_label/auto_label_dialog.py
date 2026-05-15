@@ -129,7 +129,7 @@ class AutoLabelDialog(QDialog):
 
         # ── 預覽表格 ──────────────────────────────────────────────
         hint = QLabel("偵測完成後可在「標籤名稱」欄雙擊修改；取消勾選可跳過該頁。")
-        hint.setStyleSheet("color:#888; font-size:11px;")
+        hint.setStyleSheet("color: #8e8e93; font-size: 11px;")
         layout.addWidget(hint)
 
         self._table = QTableWidget()
@@ -148,16 +148,13 @@ class AutoLabelDialog(QDialog):
         self._status_label = QLabel("")
         layout.addWidget(self._status_label)
 
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok |
-            QDialogButtonBox.StandardButton.Cancel
-        )
-        btns.button(QDialogButtonBox.StandardButton.Ok).setText("套用標籤")
-        btns.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
-        btns.accepted.connect(self._apply)
-        btns.rejected.connect(self.reject)
-        self._ok_btn = btns.button(QDialogButtonBox.StandardButton.Ok)
-        layout.addWidget(btns)
+        from ui.dialogs._button_helper import make_ok_cancel_row
+        row, ok_btn, cancel_btn = make_ok_cancel_row(self, ok_text="套用標籤", cancel_text="取消")
+        ok_btn.setEnabled(False)
+        ok_btn.clicked.connect(self._apply)
+        cancel_btn.clicked.connect(self.reject)
+        self._ok_btn = ok_btn
+        layout.addLayout(row)
 
     def _check_markitdown(self):
         """若 markitdown 未安裝，在 combo 標記。"""

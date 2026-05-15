@@ -81,7 +81,16 @@ def build(onefile: bool, use_upx: bool, sign_cert: str | None, sign_pass: str | 
         "--collect-all", "pymupdf_fonts",
         # ── PDF 安全 / 簽章 ───────────────────────────────────
         "--collect-all", "pikepdf",
-        "--collect-all", "pyhanko",
+        # pyhanko: 只匯入實際用到的模組，避免 collect-all 拉進
+        # torch/transformers/scipy 等巨型無關套件
+        "--hidden-import", "pyhanko",
+        "--hidden-import", "pyhanko.sign",
+        "--hidden-import", "pyhanko.sign.signers",
+        "--hidden-import", "pyhanko.sign.fields",
+        "--hidden-import", "pyhanko.sign.validation",
+        "--hidden-import", "pyhanko.pdf_utils",
+        "--hidden-import", "pyhanko.pdf_utils.reader",
+        "--hidden-import", "pyhanko.pdf_utils.incremental_writer",
         "--hidden-import", "pyhanko_certvalidator",
         "--hidden-import", "cryptography",
         # ── 匯出 / 轉換 ───────────────────────────────────────
@@ -97,6 +106,18 @@ def build(onefile: bool, use_upx: bool, sign_cert: str | None, sign_pass: str | 
         # ── 自動標籤（stdlib）────────────────────────────────
         "--hidden-import", "urllib.request",
         "--hidden-import", "xml.etree.ElementTree",
+        # ── 排除不需要的巨型套件（防止被間接拉入）──────────────
+        "--exclude-module", "torch",
+        "--exclude-module", "transformers",
+        "--exclude-module", "scipy",
+        "--exclude-module", "tensorflow",
+        "--exclude-module", "tensorboard",
+        "--exclude-module", "onnxruntime",
+        "--exclude-module", "pytest",
+        "--exclude-module", "sympy",
+        "--exclude-module", "IPython",
+        "--exclude-module", "notebook",
+        "--exclude-module", "matplotlib",
         # ── Windows 版本資訊 ──────────────────────────────────
         "--version-file", _write_version_file(),
     ]

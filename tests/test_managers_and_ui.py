@@ -2,20 +2,26 @@ import fitz
 import os
 import tempfile
 import time
+from unittest.mock import patch
 
 import acro_platform
 import platform as std_platform
+import pytest
 from core.compare_engine import CompareEngine
 from core.dependency_manager import DependencyManager
 from core.document import PDFDocument
 from core.temp_manager import cleanup_temp_files
 from ui.dialogs.compare.compare_dialog import CompareDialog
-from ui.dialogs.export.export_dialog import ExportDialog
+from ui.dialogs.export.export_dialog import ExportDialog, default_export_path, ensure_export_suffix
 from ui.dialogs.ocr.ocr_dialog import OCRDialog
 from ui.dialogs.optimize.optimize_dialog import OptimizeDialog
 from ui.dialogs.security.security_dialog import SecurityDialog
 from ui.dialogs.signature.sign_dialog import SignDialog
+from ui.dialogs.document_properties_dialog import DocumentPropertiesDialog
+from ui.dialogs.print_dialog import PrintDialog, _parse_page_ranges
 from ui.main_window import MainWindow
+from ui.panels.thumbnail_panel import ThumbnailPanel
+from rendering.cache import PixmapCache
 
 
 def test_export_compare_optimize_and_security(sample_pdf, tmp_path):
@@ -91,17 +97,80 @@ def test_main_window_and_dialogs_smoke(qapp, sample_pdf):
     doc = window._current_doc()
     assert doc is not None
     assert window._doc_tabs.count() == 1
+    assert window._close_pdf_btn.text() == "關閉 PDF"
+    assert window._close_pdf_btn.isEnabled()
+    assert [label for label, _ in window._side_pages] == ["案件", "工具", "縮圖", "書籤"]
+    assert window._left_panel.minimumWidth() >= 300
+    for idx, expected in enumerate(["案件", "工具", "縮圖", "書籤"]):
+        button = window._nav_group.button(idx)
+        assert button is not None
+        assert button.text() == expected
 
     dialogs = [
-        OCRDialog(doc, window),
+        OCRDialog(doc, 0, window),
         ExportDialog(doc, "txt", window),
         OptimizeDialog(doc, window),
         SecurityDialog(doc, window),
         SignDialog(doc, window),
+        DocumentPropertiesDialog(doc, window),
         CompareDialog(window),
+        PrintDialog(doc.page_count, 0, window),
     ]
     for dialog in dialogs:
         assert dialog.windowTitle()
+
+
+def test_print_dialog_page_range_parser():
+    assert _parse_page_ranges("1-3, 5，7", 8) == [0, 1, 2, 4, 6]
+    assert _parse_page_ranges("2,2,3", 4) == [1, 2]
+
+
+def test_thumbnail_panel_defers_pixmap_rendering(qapp, sample_pdf):
+    doc = PDFDocument()
+    assert doc.open(str(sample_pdf))
+    panel = ThumbnailPanel()
+    panel.load_document(doc)
+
+    assert panel.count() == doc.page_count
+    assert panel._rendered_pages == set()
+    doc.close()
+
+
+def test_pixmap_cache_respects_byte_budget(qapp):
+    from PyQt6.QtGui import QPixmap
+
+    cache = PixmapCache(max_size=20, max_bytes=10_000)
+    for page in range(5):
+        cache.put(page, 1.0, 0, QPixmap(100, 100))
+
+    assert len(cache._cache) < 5
+
+
+def test_export_default_path_uses_document_folder(qapp, tmp_path):
+    path = tmp_path / "和解書.pdf"
+    doc_fitz = fitz.open()
+    doc_fitz.new_page().insert_text((72, 72), "settlement")
+    doc_fitz.save(path)
+    doc_fitz.close()
+
+    doc = PDFDocument()
+    assert doc.open(str(path))
+
+    out = default_export_path(doc, "docx")
+    assert out == str(tmp_path / "和解書.docx")
+    assert out != "/和解書.docx"
+    assert ensure_export_suffix(str(tmp_path / "和解書.pdf"), "docx") == str(tmp_path / "和解書.docx")
+    doc.close()
+
+
+def test_export_rejects_unwritable_folder(sample_pdf, tmp_path):
+    doc = PDFDocument()
+    assert doc.open(str(sample_pdf))
+
+    with patch("core.export_manager.os.access", return_value=False):
+        with pytest.raises(PermissionError, match="儲存位置不可寫入"):
+            doc.exports.export(str(tmp_path / "out.docx"), "docx")
+    doc.close()
 
 
 def test_main_window_can_open_multiple_documents(qapp, tmp_path):

@@ -23,7 +23,7 @@ class ExtractDialog(QDialog):
         if self._preselected:
             pages_str = ", ".join(str(p + 1) for p in sorted(self._preselected))
             hint = QLabel(f"已選取頁面：{pages_str}")
-            hint.setStyleSheet("color: #0078d4; font-size: 12px;")
+            hint.setStyleSheet("color: #007AFF; font-size: 12px;")
             layout.addWidget(hint)
 
         layout.addWidget(QLabel("擷取頁碼（逗號或連字號，例：1,3,5-8）："))
@@ -32,6 +32,7 @@ class ExtractDialog(QDialog):
             self._pages_edit.setText(
                 ", ".join(str(p + 1) for p in sorted(self._preselected))
             )
+        self._pages_edit.textChanged.connect(self._update_default_path)
         layout.addWidget(self._pages_edit)
 
         self._delete_check = QCheckBox("擷取後從原文件刪除這些頁面")
@@ -47,6 +48,9 @@ class ExtractDialog(QDialog):
         row.addWidget(browse)
         layout.addLayout(row)
 
+        # 初始化預設路徑
+        self._update_default_path(self._pages_edit.text())
+
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         ok = QPushButton("擷取")
@@ -60,8 +64,49 @@ class ExtractDialog(QDialog):
         btn_row.addWidget(cancel)
         layout.addLayout(btn_row)
 
+    def _default_dir(self) -> str:
+        """來源檔案所在目錄，fallback 到桌面。"""
+        src = self._doc.source_path or self._doc.path
+        if src:
+            return os.path.dirname(src)
+        return os.path.expanduser("~/Desktop")
+
+    def _page_suffix(self, pages_text: str) -> str:
+        """把頁碼輸入轉成簡短後綴，例如 '2' → '_P2'、'1,3' → '_P1,3'、'5-8' → '_P5-8'。"""
+        raw = pages_text.strip()
+        if not raw:
+            return "_擷取"
+        # 清理多餘空白，保留逗號和連字號
+        compact = raw.replace(" ", "").replace("，", ",")
+        # 長度限制，避免檔名過長
+        if len(compact) > 20:
+            compact = compact[:20] + "…"
+        return f"_P{compact}"
+
+    def _build_default_path(self, pages_text: str) -> str:
+        src = self._doc.source_path or self._doc.path
+        if src:
+            stem = os.path.splitext(os.path.basename(src))[0]
+        else:
+            stem = "擷取"
+        suffix = self._page_suffix(pages_text)
+        return os.path.join(self._default_dir(), f"{stem}{suffix}.pdf")
+
+    def _update_default_path(self, pages_text: str):
+        """頁碼輸入變化時自動更新輸出路徑（只在使用者尚未手動輸入時更新）。"""
+        current = self._out_edit.text()
+        # 若使用者已手動修改（不以預設 stem 開頭），不覆蓋
+        src = self._doc.source_path or self._doc.path
+        stem = os.path.splitext(os.path.basename(src))[0] if src else "擷取"
+        if current and not os.path.basename(current).startswith(stem):
+            return
+        self._out_edit.setText(self._build_default_path(pages_text))
+
     def _browse(self):
-        path, _ = QFileDialog.getSaveFileName(self, "擷取為", "", "PDF 檔案 (*.pdf)")
+        start = self._out_edit.text() or self._default_dir()
+        path, _ = QFileDialog.getSaveFileName(
+            self, "擷取為", start, "PDF 檔案 (*.pdf)"
+        )
         if path:
             self._out_edit.setText(path)
 
@@ -72,11 +117,17 @@ class ExtractDialog(QDialog):
             part = part.strip()
             if not part:
                 continue
-            if "-" in part:
-                a, b = part.split("-", 1)
-                result.extend(range(int(a) - 1, int(b)))
-            else:
-                result.append(int(part) - 1)
+            try:
+                if "-" in part:
+                    a, b = part.split("-", 1)
+                    a_int, b_int = int(a.strip()), int(b.strip())
+                    if a_int > b_int:
+                        a_int, b_int = b_int, a_int  # 自動修正反向範圍
+                    result.extend(range(a_int - 1, b_int))
+                else:
+                    result.append(int(part) - 1)
+            except ValueError:
+                continue  # 忽略非數字部分
         return sorted(set(p for p in result if 0 <= p < self._doc.page_count))
 
     def _do_extract(self):
@@ -101,7 +152,11 @@ class ExtractDialog(QDialog):
             new_doc.close()
 
             if self._delete_check.isChecked():
-                self._doc.pages.delete(indices)
+                if len(indices) >= self._doc.page_count:
+                    QMessageBox.warning(self, "提示",
+                        "無法刪除所有頁面，PDF 至少需保留一頁。\n擷取已完成但原文件保留不變。")
+                else:
+                    self._doc.pages.delete(indices)
 
             QMessageBox.information(self, "完成",
                 f"已擷取 {len(indices)} 頁至：\n{os.path.basename(out)}")

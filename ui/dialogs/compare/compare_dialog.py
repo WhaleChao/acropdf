@@ -55,12 +55,11 @@ class CompareDialog(QDialog):
         self._progress.setVisible(False)
         layout.addWidget(self._progress)
 
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        btns.accepted.connect(self._compare)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
+        from ui.dialogs._button_helper import make_ok_cancel_row
+        row, ok_btn, cancel_btn = make_ok_cancel_row(self, ok_text="開始比較", cancel_text="取消")
+        ok_btn.clicked.connect(self._compare)
+        cancel_btn.clicked.connect(self.reject)
+        layout.addLayout(row)
 
     def _pick(self, is_a: bool):
         path, _ = QFileDialog.getOpenFileName(self, "選擇 PDF", "", "PDF (*.pdf)")
@@ -84,13 +83,9 @@ class CompareDialog(QDialog):
                 text=self._chk_text.isChecked(),
                 visual=self._chk_visual.isChecked(),
             )
-            pages_diff = result.get("pages_with_diff", 0)
-            QMessageBox.information(
-                self, "比較完成",
-                "比較完成\n"
-                f"發現差異頁面數：{pages_diff}\n"
-                f"已比較頁數：{result.get('pages_compared', 0)}"
-            )
+            from ui.dialogs.compare.compare_result_dialog import CompareResultDialog
             self.accept()
+            dlg = CompareResultDialog(self._path_a, self._path_b, result, self.parent())
+            dlg.exec()
         except Exception as e:
             QMessageBox.critical(self, "比較失敗", str(e))

@@ -18,20 +18,26 @@ class RenderWorker(QRunnable):
         self._zoom = zoom
         self._rotation = rotation
         self._signals = signals
-        self._dpr = QApplication.primaryScreen().devicePixelRatio() if QApplication.instance() else 1.0
+        screen = QApplication.primaryScreen() if QApplication.instance() else None
+        self._dpr = min(screen.devicePixelRatio(), 1.5) if screen else 1.0
 
     def run(self):
+        doc = None
         try:
             doc = fitz.open(self._path)
+            if self._page_num >= doc.page_count:
+                return
             pm = PageRenderer.render_page_sync(
                 doc[self._page_num], self._zoom, self._rotation, self._dpr
             )
-            doc.close()
             if self._signals:
                 self._signals.done.emit(self._page_num, self._zoom, pm)
         except Exception as e:
             if self._signals:
                 self._signals.error.emit(self._page_num, str(e))
+        finally:
+            if doc:
+                doc.close()
 
 class PageRenderer:
     @staticmethod

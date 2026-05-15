@@ -1,0 +1,82 @@
+# ~/Desktop/acropdf/core/redaction_engine.py
+import re
+import fitz
+
+
+class RedactionEngine:
+    PATTERNS = {
+        "身分證字號": r"[A-Z][12]\d{8}",
+        "手機號碼": r"09\d{2}[- ]?\d{3}[- ]?\d{3}",
+        "電子郵件": r"[\w.\-+]+@[\w.\-]+\.\w+",
+        "信用卡號": r"\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}",
+    }
+
+    def __init__(self, doc):
+        self._doc = doc
+
+    @property
+    def _fitz(self) -> fitz.Document:
+        return self._doc.fitz_doc
+
+    def _safe_fitz(self) -> fitz.Document:
+        d = self._fitz
+        if d is None:
+            raise RuntimeError("尚未載入文件")
+        return d
+
+    def search_and_mark(self, text: str) -> list[dict]:
+        """搜尋所有頁面中的文字並標記塗黑，回傳 [{page, rect, text}]"""
+        doc = self._safe_fitz()
+        results = []
+        for i in range(doc.page_count):
+            page = doc[i]
+            hits = page.search_for(text)
+            for rect in hits:
+                page.add_redact_annot(rect)
+                results.append({"page": i, "rect": rect, "text": text})
+        return results
+
+    def pattern_mark(self, pattern: str) -> list[dict]:
+        """用正規表達式搜尋並標記塗黑"""
+        doc = self._safe_fitz()
+        results = []
+        compiled = re.compile(pattern)
+        for i in range(doc.page_count):
+            page = doc[i]
+            text = page.get_text()
+            for m in compiled.finditer(text):
+                matched = m.group()
+                hits = page.search_for(matched)
+                for rect in hits:
+                    page.add_redact_annot(rect)
+                    results.append({"page": i, "rect": rect, "text": matched})
+        return results
+
+    def get_redact_count(self) -> int:
+        """計算目前的塗黑標記數量"""
+        doc = self._safe_fitz()
+        count = 0
+        for i in range(doc.page_count):
+            page = doc[i]
+            for annot in page.annots():
+                if annot.type[0] == fitz.PDF_ANNOT_REDACT:
+                    count += 1
+        return count
+
+    def apply_all(self) -> int:
+        """套用所有塗黑標記（不可逆），回傳套用數量"""
+        doc = self._safe_fitz()
+        total = 0
+        self._doc.begin_op("套用塗黑")
+        for i in range(doc.page_count):
+            page = doc[i]
+            count_before = sum(
+                1 for a in page.annots() if a.type[0] == fitz.PDF_ANNOT_REDACT
+            )
+            if count_before:
+                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+                total += count_before
+        self._doc.end_op()
+        if total:
+            self._doc._mark_modified()
+        return total

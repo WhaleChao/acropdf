@@ -14,7 +14,7 @@ import fitz
 from PyQt6.QtCore import QPoint, QRect, Qt
 from PyQt6.QtGui import QColor, QPen, QFont, QPolygon
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+    QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
     QHBoxLayout, QInputDialog, QLabel, QLineEdit,
     QMessageBox, QRadioButton, QSpinBox, QVBoxLayout,
     QTextEdit, QPushButton,
@@ -49,14 +49,22 @@ class BaseTool:
         self._start = None
 
     def _page(self, page_num: int):
-        return self.doc.fitz_doc[page_num]
+        fd = self.doc.fitz_doc
+        if fd is None or page_num < 0 or page_num >= fd.page_count:
+            return None
+        return fd[page_num]
 
-    def _pdf_point(self, widget, pos: QPoint) -> fitz.Point:
-        return widget.widget_to_pdf(pos, self._page(widget.page_num))
+    def _pdf_point(self, widget, pos: QPoint):
+        page = self._page(widget.page_num)
+        if page is None:
+            return None
+        return widget.widget_to_pdf(pos, page)
 
-    def _pdf_rect(self, widget, start: QPoint, end: QPoint) -> fitz.Rect:
+    def _pdf_rect(self, widget, start: QPoint, end: QPoint):
         p1 = self._pdf_point(widget, start)
         p2 = self._pdf_point(widget, end)
+        if p1 is None or p2 is None:
+            return None
         return fitz.Rect(min(p1.x, p2.x), min(p1.y, p2.y),
                          max(p1.x, p2.x), max(p1.y, p2.y))
 
@@ -195,7 +203,10 @@ def _draw_rubber_band(painter, overlay: QRect | None,
 def _detect_font_size(doc, page_num: int, rect: fitz.Rect) -> float:
     """從頁面文字偵測周圍主要字體大小。"""
     try:
-        page = doc.fitz_doc[page_num]
+        fd = doc.fitz_doc
+        if fd is None or page_num < 0 or page_num >= fd.page_count:
+            return 12.0
+        page = fd[page_num]
         search = rect + (-60, -60, 60, 60)
         blocks = page.get_text("dict", clip=search)["blocks"]
         sizes = []
@@ -222,10 +233,14 @@ class StickyNoteTool(BaseTool):
     def mouse_release(self, widget, event, pos: QPoint):
         if event.button() != Qt.MouseButton.LeftButton:
             return
+        pt = self._pdf_point(widget, pos)
+        if pt is None:
+            self._start = None
+            return
         text, ok = QInputDialog.getText(widget, "新增便利貼", "內容：")
         if ok and text.strip():
             self.doc.annotations.add_text_annot(
-                widget.page_num, self._pdf_point(widget, pos), text.strip())
+                widget.page_num, pt, text.strip())
         self._start = None
 
 
@@ -257,6 +272,9 @@ class TextBoxTool(BaseTool):
             self._start = None
             return
         pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+        if pdf_rect is None:
+            self._start = None
+            return
         detected = _detect_font_size(self.doc, widget.page_num, pdf_rect)
         rect_info = (f"選取範圍：{pdf_rect.width:.0f} × {pdf_rect.height:.0f} pt"
                      f"  （第 {widget.page_num + 1} 頁）")
@@ -303,6 +321,9 @@ class CalloutTool(BaseTool):
             self._start = None
             return
         pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+        if pdf_rect is None:
+            self._start = None
+            return
         detected = _detect_font_size(self.doc, widget.page_num, pdf_rect)
         text, ok = QInputDialog.getMultiLineText(widget, "標注框", "內容：")
         if ok and text.strip():
@@ -340,7 +361,8 @@ class HighlightTool(BaseTool):
         widget.update()
         if rect_w.width() >= 5 and rect_w.height() >= 5:
             pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
-            self.doc.annotations.add_area_highlight(widget.page_num, pdf_rect)
+            if pdf_rect is not None:
+                self.doc.annotations.add_area_highlight(widget.page_num, pdf_rect)
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -373,7 +395,8 @@ class UnderlineTool(BaseTool):
         widget.update()
         if rect_w.width() >= 5 and rect_w.height() >= 3:
             pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
-            self.doc.annotations.add_area_underline(widget.page_num, pdf_rect)
+            if pdf_rect is not None:
+                self.doc.annotations.add_area_underline(widget.page_num, pdf_rect)
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -417,7 +440,8 @@ class StrikeoutTool(BaseTool):
         widget.update()
         if rect_w.width() >= 5 and rect_w.height() >= 3:
             pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
-            self.doc.annotations.add_area_strikeout(widget.page_num, pdf_rect)
+            if pdf_rect is not None:
+                self.doc.annotations.add_area_strikeout(widget.page_num, pdf_rect)
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -466,6 +490,9 @@ class FreehandTool(BaseTool):
         pdf_pts = []
         for pt in self._stroke:
             p = self._pdf_point(widget, pt)
+            if p is None:
+                self._stroke = []
+                return
             pdf_pts.append((p.x, p.y))
         if len(pdf_pts) >= 2:
             self.doc.annotations.add_ink(
@@ -514,17 +541,32 @@ class EraserTool(BaseTool):
 
     def _erase_at(self, widget, pos: QPoint):
         pdf_pt = self._pdf_point(widget, pos)
-        page = self.doc.fitz_doc[widget.page_num]
+        if pdf_pt is None:
+            return
+        page = self._page(widget.page_num)
+        if page is None:
+            return
         to_delete = []
-        for annot in page.annots():
+        for annot in (page.annots() or []):
             r = annot.rect
             # 擴大 4pt 偵測範圍，方便點選
             if r.contains(pdf_pt) or fitz.Rect(
                     r.x0 - 4, r.y0 - 4, r.x1 + 4, r.y1 + 4).contains(pdf_pt):
                 to_delete.append(annot)
-        for a in to_delete:
-            self.doc.annotations.delete_annot(widget.page_num, a)
-        if to_delete:
+        # 逐一刪除：每次重新取得第一個匹配，避免 stale annot 參照
+        deleted_count = 0
+        for _ in to_delete:
+            page = self._page(widget.page_num)
+            if page is None:
+                break
+            for annot in (page.annots() or []):
+                r = annot.rect
+                if r.contains(pdf_pt) or fitz.Rect(
+                        r.x0 - 4, r.y0 - 4, r.x1 + 4, r.y1 + 4).contains(pdf_pt):
+                    self.doc.annotations.delete_annot(widget.page_num, annot)
+                    deleted_count += 1
+                    break
+        if deleted_count:
             widget.update()
 
     def draw_overlay(self, widget, painter):
@@ -566,10 +608,13 @@ class StampTool(BaseTool):
         if rect_w.width() < 10 or rect_w.height() < 10:
             self._start = None
             return
+        pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+        if pdf_rect is None:
+            self._start = None
+            return
         dlg = _StampChooserDialog(widget)
         if dlg.exec():
             stamp = dlg.get_stamp()
-            pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
             self.doc.annotations.add_stamp(widget.page_num, pdf_rect, stamp)
         self._start = None
 
@@ -605,6 +650,9 @@ class RedactTool(BaseTool):
             self._start = None
             return
         pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+        if pdf_rect is None:
+            self._start = None
+            return
         self.doc.annotations.add_redact(widget.page_num, pdf_rect, text="")
         QMessageBox.information(widget, "已標記塗黑",
                                 "已加入塗黑區塊。儲存前請從選單執行「套用永久塗黑」。")
@@ -639,10 +687,10 @@ class RectTool(BaseTool):
         self._overlay = None
         widget.update()
         if rect_w.width() >= 5 and rect_w.height() >= 5:
-            self.doc.annotations.add_rect(
-                widget.page_num,
-                self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight()),
-                color=(1, 0, 0))
+            pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+            if pdf_rect is not None:
+                self.doc.annotations.add_rect(
+                    widget.page_num, pdf_rect, color=(1, 0, 0))
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -674,10 +722,10 @@ class CircleTool(BaseTool):
         self._overlay = None
         widget.update()
         if rect_w.width() >= 5 and rect_w.height() >= 5:
-            self.doc.annotations.add_circle(
-                widget.page_num,
-                self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight()),
-                color=(0, 0.5, 1))
+            pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+            if pdf_rect is not None:
+                self.doc.annotations.add_circle(
+                    widget.page_num, pdf_rect, color=(0, 0.5, 1))
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -715,10 +763,11 @@ class LineTool(BaseTool):
         if self._start and pos:
             p1 = self._pdf_point(widget, self._start)
             p2 = self._pdf_point(widget, pos)
-            dx, dy = p2.x - p1.x, p2.y - p1.y
-            if math.hypot(dx, dy) >= 5:
-                self.doc.annotations.add_line(
-                    widget.page_num, p1, p2, color=(0, 0, 0))
+            if p1 is not None and p2 is not None:
+                dx, dy = p2.x - p1.x, p2.y - p1.y
+                if math.hypot(dx, dy) >= 5:
+                    self.doc.annotations.add_line(
+                        widget.page_num, p1, p2, color=(0, 0, 0))
         self._start = None
         self._end_pos = None
         widget.update()
@@ -756,7 +805,7 @@ class ArrowTool(BaseTool):
         if self._start and pos:
             p1 = self._pdf_point(widget, self._start)
             p2 = self._pdf_point(widget, pos)
-            if math.hypot(p2.x - p1.x, p2.y - p1.y) >= 5:
+            if p1 is not None and p2 is not None and math.hypot(p2.x - p1.x, p2.y - p1.y) >= 5:
                 self.doc.annotations.add_line(
                     widget.page_num, p1, p2, color=(0.8, 0, 0),
                     end_symbol="OpenArrow")
@@ -817,9 +866,10 @@ class MeasureDistTool(BaseTool):
             self._p2 = pos
             pp1 = self._pdf_point(widget, self._p1)
             pp2 = self._pdf_point(widget, pos)
-            dist_pt = math.hypot(pp2.x - pp1.x, pp2.y - pp1.y)
-            dist_mm = dist_pt * 25.4 / 72
-            self._label = f"{dist_mm:.2f} mm  ({dist_pt:.1f} pt)"
+            if pp1 is not None and pp2 is not None:
+                dist_pt = math.hypot(pp2.x - pp1.x, pp2.y - pp1.y)
+                dist_mm = dist_pt * 25.4 / 72
+                self._label = f"{dist_mm:.2f} mm  ({dist_pt:.1f} pt)"
             widget.update()
 
     def mouse_release(self, widget, event, pos: QPoint):
@@ -905,6 +955,8 @@ class MeasureAreaTool(BaseTool):
             return
         # 用 Shoelace 公式計算 widget 像素面積，再換算成 PDF 單位
         pts_pdf = [self._pdf_point(widget, p) for p in self._points]
+        if any(p is None for p in pts_pdf):
+            return
         n = len(pts_pdf)
         area_pt2 = abs(sum(
             pts_pdf[i].x * pts_pdf[(i + 1) % n].y -
@@ -990,6 +1042,9 @@ class CropTool(BaseTool):
             self._start = None
             return
         pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+        if pdf_rect is None:
+            self._start = None
+            return
         reply = QMessageBox.question(
             widget, "確認裁切",
             f"裁切第 {widget.page_num + 1} 頁至選取範圍？\n（可透過「還原全頁」恢復）",
@@ -1031,6 +1086,9 @@ class LinkTool(BaseTool):
             self._start = None
             return
         pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+        if pdf_rect is None:
+            self._start = None
+            return
         dlg = _LinkDialog(max_page=self.doc.page_count, parent=widget)
         if dlg.exec():
             link_type, target = dlg.get_result()
@@ -1073,6 +1131,9 @@ class FormFieldTool(BaseTool):
             self._start = None
             return
         pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
+        if pdf_rect is None:
+            self._start = None
+            return
         dlg = _FormFieldDialog(widget)
         if dlg.exec():
             ftype, fname, fdefault = dlg.get_result()
@@ -1100,13 +1161,135 @@ class FormFieldTool(BaseTool):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 手形工具（拖曳平移）
+# ═══════════════════════════════════════════════════════════════
+
+@dataclass
+class HandTool(BaseTool):
+    """拖曳工具：按住左鍵拖曳可平移 PDF 檢視區域。"""
+    _last_pos: QPoint | None = None
+
+    def mouse_press(self, widget, event, pos: QPoint):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._last_pos = event.globalPosition().toPoint()
+            widget.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+    def mouse_move(self, widget, event, pos: QPoint):
+        if self._last_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            delta = event.globalPosition().toPoint() - self._last_pos
+            self._last_pos = event.globalPosition().toPoint()
+            scroll_area = self.view
+            h_bar = scroll_area.horizontalScrollBar()
+            v_bar = scroll_area.verticalScrollBar()
+            h_bar.setValue(h_bar.value() - delta.x())
+            v_bar.setValue(v_bar.value() - delta.y())
+
+    def mouse_release(self, widget, event, pos: QPoint):
+        self._last_pos = None
+        widget.setCursor(Qt.CursorShape.OpenHandCursor)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 縮放工具（點擊放大）
+# ═══════════════════════════════════════════════════════════════
+
+@dataclass
+class ZoomTool(BaseTool):
+    """縮放工具：點擊放大、Shift+點擊縮小。"""
+
+    def mouse_press(self, widget, event, pos: QPoint):
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        scroll_area = self.view
+        if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            scroll_area.zoom_out()
+        else:
+            scroll_area.zoom_in()
+
+    def mouse_move(self, widget, event, pos: QPoint):
+        return
+
+    def mouse_release(self, widget, event, pos: QPoint):
+        return
+
+
+# ═══════════════════════════════════════════════════════════════
+# 選取工具（文字框選 + 複製）
+# ═══════════════════════════════════════════════════════════════
+
+class SelectTool(BaseTool):
+    """框選 PDF 文字並複製到剪貼簿。"""
+
+    def __init__(self, mode, view, doc):
+        super().__init__(mode, view, doc)
+        self._end: QPoint | None = None
+        self._dragging = False
+
+    def mouse_press(self, widget, event, pos: QPoint):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._start = pos
+            self._end = pos
+            self._dragging = True
+            widget.update()
+
+    def mouse_move(self, widget, event, pos: QPoint):
+        if self._dragging and self._start is not None:
+            self._end = pos
+            widget.update()
+
+    def mouse_release(self, widget, event, pos: QPoint):
+        if event.button() != Qt.MouseButton.LeftButton or not self._dragging:
+            return
+        self._dragging = False
+        if self._start is None or self._end is None:
+            return
+
+        # 將 widget 座標轉為 PDF 座標
+        page = self._page(widget.page_num)
+        sel_rect = self._pdf_rect(widget, self._start, pos)
+        if page is None or sel_rect is None:
+            self._start = None
+            self._end = None
+            widget.update()
+            return
+
+        # 取得頁面上的所有 words
+        words = page.get_text("words")  # list of (x0, y0, x1, y1, word, ...)
+        selected = []
+        for w in words:
+            word_rect = fitz.Rect(w[:4])
+            if sel_rect.intersects(word_rect):
+                selected.append(w[4])
+
+        if selected:
+            text = " ".join(selected)
+            QApplication.clipboard().setText(text)
+
+        self._start = None
+        self._end = None
+        widget.update()
+
+    def draw_overlay(self, widget, painter):
+        if self._dragging and self._start is not None and self._end is not None:
+            rect = _normalized_rect(self._start, self._end)
+            painter.setPen(QPen(QColor(0, 120, 215), 1, Qt.PenStyle.DashLine))
+            painter.setBrush(QColor(0, 120, 215, 40))
+            painter.drawRect(rect)
+
+
+# ═══════════════════════════════════════════════════════════════
 # 工廠
 # ═══════════════════════════════════════════════════════════════
 
 class ToolFactory:
     @staticmethod
     def create(mode: ToolMode, view, doc):
+        # 延遲匯入新工具模組，避免循環依賴
+        from ui.tools.text_edit_tool import TextEditTool
+        from ui.tools.image_edit_tool import ImageEditTool
         mapping = {
+            ToolMode.HAND:         HandTool,
+            ToolMode.ZOOM:         ZoomTool,
             ToolMode.HIGHLIGHT:    HighlightTool,
             ToolMode.UNDERLINE:    UnderlineTool,
             ToolMode.STRIKEOUT:    StrikeoutTool,
@@ -1126,6 +1309,10 @@ class ToolFactory:
             ToolMode.CROP:         CropTool,
             ToolMode.LINK:         LinkTool,
             ToolMode.FORM_FIELD:   FormFieldTool,
+            ToolMode.SELECT:       SelectTool,
+            ToolMode.TEXT_EDIT:     TextEditTool,
+            ToolMode.IMAGE_EDIT:   ImageEditTool,
+            ToolMode.CUSTOM_STAMP: StampTool,  # 自訂圖章共用 StampTool
         }
         tool_cls = mapping.get(mode)
         return tool_cls(mode, view, doc) if tool_cls else None

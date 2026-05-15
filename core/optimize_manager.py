@@ -12,6 +12,8 @@ class OptimizeManager:
     def optimize(self, output_path: str, compress_images: bool = True,
                  subset_fonts: bool = True, remove_metadata: bool = False,
                  linearize: bool = False, preset: int = 1):
+        if not self._fitz:
+            return
         garbage_level = 2 if preset == 0 else 3 if preset == 1 else 4
         doc = fitz.open("pdf", self._fitz.tobytes(garbage=garbage_level, deflate=compress_images))
         try:
@@ -37,6 +39,8 @@ class OptimizeManager:
 
     def compress(self, output_path: str, image_quality: int = 75):
         """壓縮圖片並儲存"""
+        if not self._fitz:
+            raise RuntimeError("尚未載入文件")
         for i in range(self._fitz.page_count):
             page = self._fitz[i]
             for img in page.get_images():
@@ -56,18 +60,34 @@ class OptimizeManager:
 
     def linearize(self, output_path: str):
         """線性化（適合 Web 快速瀏覽）"""
-        self._fitz.save(output_path, linear=True, garbage=4, deflate=True)
+        if not self._fitz:
+            raise RuntimeError("尚未載入文件")
+        try:
+            self._fitz.save(output_path, linear=True, garbage=4, deflate=True)
+        except Exception:
+            # linear 不被支援時，退回不線性化的儲存
+            self._fitz.save(output_path, garbage=4, deflate=True)
 
     def scrub_metadata(self, output_path: str):
         """清除隱藏內容、中繼資料"""
+        if not self._fitz:
+            raise RuntimeError("尚未載入文件")
         self._fitz.scrub()
         self._fitz.save(output_path, garbage=4, deflate=True, clean=True)
 
     def full_optimize(self, output_path: str):
         """一鍵全套最佳化"""
+        if not self._fitz:
+            raise RuntimeError("尚未載入文件")
         self._fitz.scrub()
-        self._fitz.save(
-            output_path,
-            garbage=4, deflate=True, clean=True,
-            linear=True
-        )
+        try:
+            self._fitz.save(
+                output_path,
+                garbage=4, deflate=True, clean=True,
+                linear=True
+            )
+        except Exception:
+            self._fitz.save(
+                output_path,
+                garbage=4, deflate=True, clean=True
+            )

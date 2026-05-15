@@ -39,3 +39,42 @@ class Config:
     @layout_mode.setter
     def layout_mode(self, mode: LayoutMode):
         self._settings.setValue("layout_mode", int(mode))
+
+    @property
+    def theme(self) -> str:
+        return self._settings.value("theme", "light") or "light"
+
+    @theme.setter
+    def theme(self, t: str):
+        self._settings.setValue("theme", t)
+        self._settings.sync()
+
+    @property
+    def show_rulers(self) -> bool:
+        return self._settings.value("show_rulers", False) in (True, "true", "True")
+
+    @show_rulers.setter
+    def show_rulers(self, v: bool):
+        self._settings.setValue("show_rulers", v)
+        self._settings.sync()
+
+    @property
+    def show_grid(self) -> bool:
+        return self._settings.value("show_grid", False) in (True, "true", "True")
+
+    @show_grid.setter
+    def show_grid(self, v: bool):
+        self._settings.setValue("show_grid", v)
+        self._settings.sync()
+
+    @property
+    def grid_spacing(self) -> int:
+        try:
+            return int(self._settings.value("grid_spacing", 20))
+        except (ValueError, TypeError):
+            return 20
+
+    @grid_spacing.setter
+    def grid_spacing(self, v: int):
+        self._settings.setValue("grid_spacing", v)
+        self._settings.sync()

@@ -29,6 +29,10 @@ class PDFDocument(QObject):
         self._signature_manager = None
         self._export_manager = None
         self._optimize_manager = None
+        self._redaction_manager = None
+        self._preflight_manager = None
+        self._font_manager = None
+        self._magi_manager = None
         self._undo_stack: list[bytes] = []
         self._redo_stack: list[bytes] = []
 
@@ -38,8 +42,13 @@ class PDFDocument(QObject):
         try:
             doc = fitz.open(normalized)
         except Exception:
-            from core.file_converter import FileConverter
-            doc = FileConverter.convert(normalized)
+            try:
+                from core.file_converter import FileConverter
+                doc = FileConverter.convert(normalized)
+            except Exception:
+                return False
+        if doc is None:
+            return False
         if doc.needs_pass:
             if not doc.authenticate(password):
                 doc.close()
@@ -184,15 +193,44 @@ class PDFDocument(QObject):
             self._optimize_manager = OptimizeManager(self)
         return self._optimize_manager
 
+    @property
+    def redaction(self):
+        if not self._redaction_manager:
+            from core.redaction_engine import RedactionEngine
+            self._redaction_manager = RedactionEngine(self)
+        return self._redaction_manager
+
+    @property
+    def preflight(self):
+        if not self._preflight_manager:
+            from core.preflight_engine import PreflightEngine
+            self._preflight_manager = PreflightEngine()
+        return self._preflight_manager
+
+    @property
+    def fonts(self):
+        if not self._font_manager:
+            from core.font_manager import FontManager
+            self._font_manager = FontManager(self)
+        return self._font_manager
+
+    @property
+    def magi(self):
+        if not self._magi_manager:
+            from core.magi_engine import MAGIEngine
+            self._magi_manager = MAGIEngine()
+        return self._magi_manager
+
     # ── Undo / Redo（snapshot-based，相容 PyMuPDF 1.24+）───────────
     # fitz journal 不支援結構操作（insert_page/delete_page/move_page），
     # 改用序列化快照方式實作 undo/redo。
     _MAX_UNDO = 20
+    _MAX_UNDO_BYTES = 300_000_000  # 300 MB 上限，避免大檔案吃爆記憶體
 
     def _journal_enable(self):
         """不再使用 fitz journal；初始化快照堆疊。"""
-        self._undo_stack = []
-        self._redo_stack = []
+        self._undo_stack: list[bytes] = []
+        self._redo_stack: list[bytes] = []
 
     def _snapshot(self) -> bytes:
         """序列化目前文件為 bytes。"""
@@ -207,7 +245,11 @@ class PDFDocument(QObject):
         if self._fitz_doc:
             snap = self._snapshot()
             self._undo_stack.append(snap)
-            if len(self._undo_stack) > self._MAX_UNDO:
+            # 同時限制筆數與總容量
+            while len(self._undo_stack) > self._MAX_UNDO:
+                self._undo_stack.pop(0)
+            while (sum(len(s) for s in self._undo_stack) > self._MAX_UNDO_BYTES
+                   and len(self._undo_stack) > 1):
                 self._undo_stack.pop(0)
             self._redo_stack.clear()
 

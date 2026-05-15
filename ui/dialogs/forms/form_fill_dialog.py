@@ -30,7 +30,7 @@ class FormFillDialog(QDialog):
 
         # ── 說明 ─────────────────────────────────────────────────
         hint = QLabel("雙擊「值」欄可直接編輯；修改後按「套用」寫入 PDF。")
-        hint.setStyleSheet("color: #888; font-size: 11px;")
+        hint.setStyleSheet("color: #8e8e93; font-size: 11px;")
         layout.addWidget(hint)
 
         # ── 欄位表格 ─────────────────────────────────────────────
@@ -64,20 +64,19 @@ class FormFillDialog(QDialog):
         action_row.addStretch()
         layout.addLayout(action_row)
 
-        # ── 確定 / 套用 / 取消 ───────────────────────────────────
+        # ── 套用 / 套用並關閉 / 取消（左→右）───────────────────────
         btn_row = QHBoxLayout()
+        btn_row.addStretch()
         apply_btn = QPushButton("套用")
         apply_btn.clicked.connect(self._apply)
+        ok_btn = QPushButton("套用並關閉")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(self._ok)
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(apply_btn)
-
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok |
-            QDialogButtonBox.StandardButton.Cancel
-        )
-        btns.button(QDialogButtonBox.StandardButton.Ok).setText("套用並關閉")
-        btns.accepted.connect(self._ok)
-        btns.rejected.connect(self.reject)
-        btn_row.addWidget(btns)
+        btn_row.addWidget(ok_btn)
+        btn_row.addWidget(cancel_btn)
         layout.addLayout(btn_row)
 
         self._fields_meta: list[dict] = []  # 對應 table 每列的 metadata

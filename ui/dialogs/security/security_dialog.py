@@ -53,6 +53,7 @@ class SecurityDialog(QDialog):
         apply_btn.clicked.connect(self._apply)
         remove_btn.clicked.connect(self._remove)
         cancel_btn.clicked.connect(self.reject)
+        btn_row.addStretch()
         btn_row.addWidget(apply_btn)
         btn_row.addWidget(remove_btn)
         btn_row.addWidget(cancel_btn)
@@ -80,6 +81,9 @@ class SecurityDialog(QDialog):
     def _remove(self):
         out, _ = QFileDialog.getSaveFileName(self, "另存新檔", "", "PDF 檔案 (*.pdf)")
         if out:
-            self._doc.security.remove_security(out)
-            QMessageBox.information(self, "完成", "安全性已移除")
-            self.accept()
+            try:
+                self._doc.security.remove_security(out)
+                QMessageBox.information(self, "完成", "安全性已移除")
+                self.accept()
+            except Exception as e:
+                QMessageBox.critical(self, "錯誤", str(e))

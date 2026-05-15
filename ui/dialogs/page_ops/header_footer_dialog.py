@@ -47,12 +47,11 @@ class HeaderFooterDialog(QDialog):
         fmt_form.addRow("邊距：",     self._margin)
         layout.addWidget(fmt_grp)
 
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        btns.accepted.connect(self._apply)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
+        from ui.dialogs._button_helper import make_ok_cancel_row
+        row, ok_btn, cancel_btn = make_ok_cancel_row(self, ok_text="套用", cancel_text="取消")
+        ok_btn.clicked.connect(self._apply)
+        cancel_btn.clicked.connect(self.reject)
+        layout.addLayout(row)
 
     def _apply(self):
         try:

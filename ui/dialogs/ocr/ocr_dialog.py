@@ -47,14 +47,15 @@ class OCRDialog(QDialog):
         custom_row.setContentsMargins(20, 0, 0, 0)
         custom_row.addWidget(QLabel("從第"))
         self._from_spin = QSpinBox()
-        self._from_spin.setRange(1, self._doc.page_count)
+        pc = max(self._doc.page_count, 1)
+        self._from_spin.setRange(1, pc)
         self._from_spin.setValue(1)
         self._from_spin.setEnabled(False)
         custom_row.addWidget(self._from_spin)
         custom_row.addWidget(QLabel("頁到第"))
         self._to_spin = QSpinBox()
-        self._to_spin.setRange(1, self._doc.page_count)
-        self._to_spin.setValue(self._doc.page_count)
+        self._to_spin.setRange(1, pc)
+        self._to_spin.setValue(pc)
         self._to_spin.setEnabled(False)
         custom_row.addWidget(self._to_spin)
         custom_row.addWidget(QLabel("頁"))
@@ -79,7 +80,7 @@ class OCRDialog(QDialog):
         self._lang_combo.addItems([
             "繁體中文 (chi_tra+eng)",
             "簡體中文 (chi_sim+eng)",
-            "English (eng)",
+            "英文 (eng)",
             "日文 (jpn)",
         ])
         self._lang_map = {
@@ -119,8 +120,8 @@ class OCRDialog(QDialog):
         cancel_btn = QPushButton("取消")
         cancel_btn.clicked.connect(self.reject)
         btn_row.addStretch()
-        btn_row.addWidget(cancel_btn)
         btn_row.addWidget(self._run_btn)
+        btn_row.addWidget(cancel_btn)
         layout.addLayout(btn_row)
 
     def _on_scope_changed(self, btn_id: int, checked: bool):

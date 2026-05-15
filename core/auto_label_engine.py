@@ -308,7 +308,7 @@ def _fix_spaced_digits(text: str) -> str:
     return _SPACED_DIGITS.sub(lambda m: m.group(0).replace(" ", ""), text)
 
 
-# ── 台灣司法文件常見 OCR 清洗規則 ────────────────────────────────────
+# ── 臺灣司法文件常見 OCR 清洗規則 ────────────────────────────────────
 # 司法院線上閱卷系統 (OLA) 每頁都會印使用者姓名 + 系統浮水印，需過濾
 _OLA_WATERMARK = re.compile(
     r"(司法院線上閱卷系統|作業平台|\d{3}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})"
@@ -462,7 +462,7 @@ def _gemma_clarify_title(ocr_text: str, prev_title: Optional[str] = None) -> str
     snippet = ocr_text.strip()[:300]
     context = f"（上一份：{prev_title}）" if prev_title else ""
     prompt = (
-        f"以下是台灣司法文件的 OCR 文字片段{context}。"
+        f"以下是臺灣司法文件的 OCR 文字片段{context}。"
         f"若這是新文件首頁，只回答文件名稱（≤20字）；若是續頁，回答「續頁」。\n"
         f"文字：{snippet}"
     )

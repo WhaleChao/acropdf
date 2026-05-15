@@ -104,7 +104,9 @@ def _launch(base: Path, pdf_path: str | None = None):
     if pdf_path:
         cmd.append(pdf_path)
 
-    kwargs: dict = {}
+    kwargs: dict = {
+        "env": {**os.environ, "ACROPDF_STATE_FILE": str((base / STATE_FILE).resolve())},
+    }
     if sys.platform != "win32":
         kwargs["start_new_session"] = True   # 子程序自己一個 process group，方便整組殺
 

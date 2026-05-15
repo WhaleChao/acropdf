@@ -58,7 +58,7 @@ class DependencyDialog(QDialog):
         layout.addWidget(title)
 
         subtitle = QLabel("安裝這些程式可以解鎖更多功能。標記「選用」的項目可以略過。")
-        subtitle.setStyleSheet("color: #666;")
+        subtitle.setStyleSheet("color: #8e8e93;")
         layout.addWidget(subtitle)
 
         layout.addSpacing(8)
@@ -94,14 +94,14 @@ class DependencyDialog(QDialog):
             # 用途說明
             purpose_label = QLabel(dep.purpose)
             purpose_label.setWordWrap(True)
-            purpose_label.setStyleSheet("color: #555; margin-bottom: 4px;")
+            purpose_label.setStyleSheet("color: #8e8e93; margin-bottom: 4px;")
             group_layout.addWidget(purpose_label)
 
             # 安裝備註
             if dep.install_note:
                 note_label = QLabel(f"💡 {dep.install_note}")
                 note_label.setWordWrap(True)
-                note_label.setStyleSheet("color: #2980b9; font-size: 10pt;")
+                note_label.setStyleSheet("color: #007AFF; font-size: 10pt;")
                 group_layout.addWidget(note_label)
 
             # 進度條
@@ -132,7 +132,7 @@ class DependencyDialog(QDialog):
                 lambda checked, url=dep.download_url: webbrowser.open(url))
 
             skip_btn = QPushButton("略過")
-            skip_btn.setStyleSheet("padding: 6px 16px; color: #999;")
+            skip_btn.setStyleSheet("padding: 6px 16px; color: #8e8e93;")
             skip_btn.clicked.connect(lambda checked, g=group: g.hide())
 
             btn_row.addWidget(auto_btn)

@@ -31,6 +31,11 @@ class ToolMode(IntEnum):
     LINK = auto()
     FORM_FIELD = auto()
     SIGNATURE = auto()
+    TEXT_EDIT = auto()
+    IMAGE_EDIT = auto()
+    CUSTOM_STAMP = auto()
+    FORM_DESIGNER = auto()
+    TEXT_REFLOW = auto()
 
 ZOOM_LEVELS = [0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
 DEFAULT_ZOOM = 1.0
