@@ -4,11 +4,20 @@ AcroPDF 是單機版 PDF 編輯工具，目標是提供接近商用 PDF 編輯�
 
 ## 目前版本
 
-- app version: `1.0.17`
-- 已驗證測試：`96 passed`
+- app version: `1.0.18`
+- 已驗證測試：`103 passed`
 - macOS 產物：`AcroPDF.dmg`
 - Windows 產物：`AcroPDF_Setup.exe`、`AcroPDF_win.zip`（由 GitHub Actions 的 Windows runner 建置）
 - Release 產物會附 `.sha256` checksum。
+
+## OpenDesk TW 一站式整合
+
+AcroPDF 1.0.18 提供本機、版本化的 OpenDesk 整合協定。OpenDesk TW 可顯示 PDF 文件報告、執行渲染與往返 LIVE 驗證，並把使用者直接帶到 AcroPDF 的頁面整理、編輯、表單、簽署、OCR、保護、預檢、批次或 MAGI 工具。
+
+- 整合只透過本機程序與 JSON 通訊，不上傳 PDF，也不回傳文件全文。
+- 開啟既有 PDF 前由 OpenDesk 建立版本備份。
+- OpenDesk TW 是公開的 MIT 啟動器；AcroPDF 維持本專案的私有授權與獨立安裝。
+- 協定與開發測試方式詳見 `OPENDESK_INTEGRATION.md`。
 
 ## 在另一台 Mac 安裝
 

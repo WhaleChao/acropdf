@@ -211,3 +211,11 @@ def test_main_window_can_open_multiple_documents(qapp, tmp_path):
         window.open_file(str(path))
 
     assert window._doc_tabs.count() == 5
+
+
+def test_opendesk_deep_link_only_runs_allowlisted_tools(qapp):
+    window = MainWindow()
+    with patch.object(window, "_show_tools_center") as tools:
+        assert window.open_integration_tool("tools") is True
+        tools.assert_called_once_with()
+    assert window.open_integration_tool("任意命令") is False

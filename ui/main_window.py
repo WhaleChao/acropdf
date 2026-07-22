@@ -195,7 +195,11 @@ class AcrobatToolsPanel(QScrollArea):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AcroPDF")
+        self.setWindowTitle(
+            "OpenDesk TW — PDF 工作區"
+            if os.environ.get("ACROPDF_OPENDESK") == "1"
+            else "AcroPDF"
+        )
         self.resize(1280, 900)
         self.setAcceptDrops(True)  # 支援拖曳開檔
         # 視窗圖示（Windows / Linux 標題欄；macOS 用 app-level icon）
@@ -214,6 +218,42 @@ class MainWindow(QMainWindow):
         self._setup_statusbar()
         # 載入主題
         self._apply_theme(self._config.theme)
+
+    def open_integration_tool(self, tool_id: str) -> bool:
+        """只接受固定工具識別碼，供 OpenDesk 直接開啟對應工作流程。"""
+        routes = {
+            "tools": self._show_tools_center,
+            "new": self.new_document,
+            "read": self._fit_width,
+            "pages": self._show_thumbnails,
+            "merge": self._merge_pdf,
+            "split": self._split_pdf,
+            "extract": self._extract_pages,
+            "edit_text": lambda: self._set_tool(ToolMode.TEXT_EDIT),
+            "edit_image": lambda: self._set_tool(ToolMode.IMAGE_EDIT),
+            "annotate": lambda: self._set_tool(ToolMode.HIGHLIGHT),
+            "watermark": self._watermark_dialog,
+            "header_footer": self._header_footer_dialog,
+            "forms": self._form_fill_dialog,
+            "form_design": self._form_designer_dialog,
+            "sign": self._sign_dialog,
+            "ocr": self._ocr_dialog,
+            "convert": lambda: self._export("docx"),
+            "optimize": self._optimize_dialog,
+            "protect": self._security_dialog,
+            "redact": self._redaction_dialog,
+            "compare": self._compare_dialog,
+            "preflight": self._preflight_dialog,
+            "accessibility": self._accessibility_dialog,
+            "batch": self._batch_dialog,
+            "filing": self._filing_dialog,
+            "magi": self._magi_dialog,
+        }
+        handler = routes.get(tool_id)
+        if handler is None:
+            return False
+        handler()
+        return True
 
     # ── UI 建置 ──────────────────────────────────────────────────
     def _setup_ui(self):
