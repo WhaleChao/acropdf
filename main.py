@@ -3,13 +3,30 @@ import sys
 import os
 import json
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt, QLocale, QTranslator, QLibraryInfo, QEvent
-from PyQt6.QtGui import QIcon, QFileOpenEvent
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.0.17"
+APP_VERSION = "1.0.18"
 APP_PUBLISHER = "WhaleChao"
+
+# OpenDesk 整合命令必須在載入 Qt 前執行，才能用於快速健康檢查與無介面 LIVE 驗證。
+from core.integration_bridge import dispatch_integration_cli
+
+_integration_exit = dispatch_integration_cli(sys.argv[1:], APP_VERSION)
+if _integration_exit is not None:
+    raise SystemExit(_integration_exit)
+
+if "--opendesk" in sys.argv:
+    os.environ["ACROPDF_OPENDESK"] = "1"
+    sys.argv.remove("--opendesk")
+if "--opendesk-tool" in sys.argv:
+    _tool_index = sys.argv.index("--opendesk-tool")
+    if _tool_index + 1 < len(sys.argv):
+        os.environ["ACROPDF_OPENDESK_TOOL"] = sys.argv[_tool_index + 1]
+        del sys.argv[_tool_index:_tool_index + 2]
+
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt, QLocale, QTranslator, QLibraryInfo, QEvent, QTimer
+from PyQt6.QtGui import QIcon, QFileOpenEvent
 
 def _state_file_path() -> Path:
     """回傳 loader 狀態檔位置；正式 app 不可寫入已簽章的 bundle。"""
@@ -130,6 +147,10 @@ def main():
                 window.open_file(arg)
             except Exception:
                 pass
+
+    integration_tool = os.environ.pop("ACROPDF_OPENDESK_TOOL", "")
+    if integration_tool:
+        QTimer.singleShot(0, lambda: window.open_integration_tool(integration_tool))
 
     code = app.exec()
     write_runtime_event("app_exit", code=code, version=APP_VERSION)

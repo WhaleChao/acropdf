@@ -8,6 +8,12 @@
 
 ## Commit 歷史
 
+### 2026-07-22 — OpenDesk TW 一站式 PDF 整合
+- 新增版本化的本機整合協定，提供引擎狀態、PDF 文件報告與 LIVE 渲染／記憶體往返驗證。
+- 新增 `--opendesk` 與 `--opendesk-tool` 深層連結，可直接進入頁面、編輯、表單、簽署、OCR、保護、預檢、批次、歸檔及 MAGI 工具。
+- PDF 報告只回傳統計、結構與警示，不回傳文件全文；加密文件不嘗試繞過密碼。
+- 本輪完整驗證：`python3 -m pytest -q` → **103 passed**。
+
 ### 2026-05-05 — Desktop MD cleanup 狀態收斂
 - 原桌面 `AcroPDF_開發計劃.md` 已歸檔至 `/Users/ai/Desktop/desktop_md_archive_20260505/`。
 - 本專案不再列入 MAGI 桌面 MD 未完成項；後續以本檔追蹤產品進度。
