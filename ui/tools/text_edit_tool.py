@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import fitz
 from PyQt6.QtCore import QPoint, QRect, Qt, QRectF
 from PyQt6.QtGui import QColor, QFont, QPen, QTextCharFormat
-from PyQt6.QtWidgets import QTextEdit, QApplication
+from PyQt6.QtWidgets import QTextEdit, QApplication, QMessageBox
 
 from app.constants import ToolMode
 from ui.tools.annotation_tools import BaseTool
@@ -63,8 +63,11 @@ def _find_text_at(page: fitz.Page, point: fitz.Point) -> dict | None:
                         "text": span["text"],
                         "rect": rect,
                         "fontsize": span["size"],
+                        "font": span["font"],
+                        "flags": span["flags"],
                         "color": (r, g, b),
                         "origin": fitz.Point(span["origin"]),
+                        "direction": tuple(line.get("dir", (1, 0))),
                     }
     return None
 
@@ -134,6 +137,8 @@ class TextEditTool(BaseTool):
     _active_widget: object = field(default=None, repr=False)
     _span_info: dict | None = field(default=None, repr=False)
     _hover_rect: QRect | None = field(default=None, repr=False)
+    _hover_page: int = field(default=-1, repr=False)
+    _committing: bool = field(default=False, repr=False)
 
     # ── 滑鼠事件 ──────────────────────────────────────────────────
 
@@ -164,11 +169,10 @@ class TextEditTool(BaseTool):
 
         # 計算覆蓋編輯器在 widget 座標系的位置
         zoom = getattr(widget, "_zoom", 1.0)
-        rect = span["rect"]
-        x = int(rect.x0 * zoom)
-        y = int(rect.y0 * zoom)
-        w = max(80, int(rect.width * zoom) + 20)   # 稍微加寬避免文字截斷
-        h = max(28, int(rect.height * zoom) + 12)
+        rect = widget.pdf_rect_to_widget(span["rect"], page)
+        x, y = rect.x(), rect.y()
+        w = max(80, rect.width() + 20)
+        h = max(28, rect.height() + 12)
 
         editor = _InlineEditor(widget, span["text"], span["fontsize"], zoom)
         editor.setGeometry(x, y, w, h)
@@ -194,12 +198,8 @@ class TextEditTool(BaseTool):
 
         span = _find_text_at(page, pdf_pt)
         if span:
-            zoom = getattr(widget, "_zoom", 1.0)
-            r = span["rect"]
-            self._hover_rect = QRect(
-                int(r.x0 * zoom), int(r.y0 * zoom),
-                int(r.width * zoom), int(r.height * zoom),
-            )
+            self._hover_rect = widget.pdf_rect_to_widget(span["rect"], page)
+            self._hover_page = widget.page_num
         else:
             self._hover_rect = None
         widget.update()
@@ -212,7 +212,7 @@ class TextEditTool(BaseTool):
 
     def draw_overlay(self, widget, painter) -> None:
         """在游標下方的文字區塊周圍繪製淺藍色邊框。"""
-        if self._hover_rect is None:
+        if self._hover_rect is None or self._hover_page != widget.page_num:
             return
         painter.save()
         pen = QPen(QColor(74, 144, 217, 180), 2, Qt.PenStyle.DashLine)
@@ -224,6 +224,15 @@ class TextEditTool(BaseTool):
     # ── 內部方法 ──────────────────────────────────────────────────
 
     def _commit_edit(self) -> None:
+        if self._committing:
+            return
+        self._committing = True
+        try:
+            self._apply_edit()
+        finally:
+            self._committing = False
+
+    def _apply_edit(self) -> None:
         """將編輯器中的新文字寫回 PDF。"""
         if self._editor is None or self._span_info is None or self._active_widget is None:
             self._cleanup_editor()
@@ -242,54 +251,13 @@ class TextEditTool(BaseTool):
             self._cleanup_editor()
             return
 
-        rect = self._span_info["rect"]
-        fontsize = self._span_info["fontsize"]
-        color = self._span_info["color"]
-
-        # ── 開始 undo 操作 ──
-        self.doc.begin_op("編輯文字")
-
+        from core.content_editor import replace_text_span
         try:
-            # 1. 塗銷原始文字區域
-            page.add_redact_annot(rect)
-            page.apply_redactions()
-
-            # 2. 選擇字型
-            fontname = _pick_fontname(new_text)
-
-            # 3. 插入新文字
-            #    使用 insert_textbox 以矩形限定範圍，自動換行
-            rc = page.insert_textbox(
-                rect,
-                new_text,
-                fontsize=fontsize,
-                fontname=fontname,
-                color=color,
-                align=fitz.TEXT_ALIGN_LEFT,
-            )
-            # rc < 0 表示文字放不下，嘗試用較小字型重試
-            if rc < 0:
-                reduced = max(6, fontsize - 1)
-                page.insert_textbox(
-                    rect,
-                    new_text,
-                    fontsize=reduced,
-                    fontname=fontname,
-                    color=color,
-                    align=fitz.TEXT_ALIGN_LEFT,
-                )
-
+            replace_text_span(self.doc, self._active_widget.page_num, self._span_info, new_text)
         except Exception as exc:
-            print(f"[TextEditTool] 文字編輯失敗: {exc}")
-        finally:
-            self.doc.end_op()
-            self.doc._mark_modified()
-
+            QMessageBox.warning(self._editor, "無法完成編輯", str(exc))
+            return
         self._cleanup_editor()
-
-        # 重新渲染頁面
-        if hasattr(self.view, "refresh_page"):
-            self.view.refresh_page(self._active_widget.page_num if self._active_widget else -1)
 
     def _cancel_edit(self) -> None:
         """取消編輯，不做任何 PDF 修改。"""

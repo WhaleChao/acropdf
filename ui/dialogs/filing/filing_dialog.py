@@ -1,6 +1,6 @@
 # ~/Desktop/acropdf/ui/dialogs/filing/filing_dialog.py
 """
-智慧歸檔對話框 — 掃描資料夾、自動分類 PDF，一鍵搬移到對應子目錄。
+智慧歸檔對話框 — 掃描資料夾、自動分類 PDF，複製歸檔到對應子目錄。
 """
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -24,27 +24,18 @@ class _FilingWorker(QThread):
     def run(self):
         try:
             from core.smart_filing_engine import SmartFilingEngine
-            import os
-            engine = SmartFilingEngine()
-            rules  = engine.default_legal_rules()
-            pdfs   = [f for f in os.listdir(self._input) if f.lower().endswith(".pdf")]
-            results = []
-            for i, fname in enumerate(pdfs):
-                self.progress.emit(i + 1, len(pdfs))
-                r = engine.analyze_and_file(
-                    self._input, self._output,
-                    rules=[r for r in rules]
-                )
-                # analyze_and_file processes all at once; emit results only once
-                break
-            # call once for all
-            results = engine.analyze_and_file(self._input, self._output)
+            results = engine.analyze_and_file(self._input, self._output, rules=rules,
+                                              progress_callback=self.progress.emit,
+                                              is_cancelled=self.isInterruptionRequested)
             self.finished.emit(results)
         except Exception as e:
             self.error.emit(str(e))
 
 
-class FilingDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class FilingDialog(WorkerDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("智慧歸檔")
@@ -115,6 +106,8 @@ class FilingDialog(QDialog):
             edit.setText(path)
 
     def _run(self):
+        if self.running_workers():
+            return
         src = self._src_edit.text().strip()
         dst = self._dst_edit.text().strip()
         if not src or not dst:

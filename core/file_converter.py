@@ -81,26 +81,25 @@ class FileConverter:
     @staticmethod
     def image_to_fitz(path: str) -> fitz.Document:
         """JPEG/PNG/BMP 等 → fitz.Document（單頁）"""
-        doc = fitz.open()               # 空 PDF
-        try:
-            img_doc = fitz.open(path)    # fitz 自動辨識圖片格式
-        except Exception:
-            return doc  # 損壞或不支援的圖片，回傳空文件
-        if img_doc.page_count == 0:
-            img_doc.close()
-            return doc
-        rect = img_doc[0].rect
-        w = max(rect.width, 1)
-        h = max(rect.height, 1)
-        page = doc.new_page(width=w, height=h)
-        # 如果 fitz 能直接當 PDF 使用就用 show_pdf_page，否則用 insert_image
-        if img_doc.is_pdf:
-            page.show_pdf_page(page.rect, img_doc, 0)
-            img_doc.close()
-        else:
-            img_doc.close()
-            page.insert_image(page.rect, filename=path)
-        return doc
+        if Path(path).suffix.lower() in (".tif", ".tiff"):
+            import io
+            from PIL import Image, ImageSequence, ImageOps
+            doc = fitz.open()
+            try:
+                with Image.open(path) as image:
+                    for frame in ImageSequence.Iterator(image):
+                        oriented=ImageOps.exif_transpose(frame).convert("RGB")
+                        dpi=frame.info.get("dpi",(96,96))
+                        xdpi=max(1,float(dpi[0]));ydpi=max(1,float(dpi[1]))
+                        page=doc.new_page(width=oriented.width*72/xdpi,height=oriented.height*72/ydpi)
+                        buffer=io.BytesIO();oriented.save(buffer,format="PNG")
+                        page.insert_image(page.rect,stream=buffer.getvalue())
+                return doc
+            except Exception:
+                doc.close();raise
+        with fitz.open(path) as original:
+            if len(original)==0: raise ValueError("圖片沒有可轉換的頁面。")
+            return fitz.open('pdf',original.convert_to_pdf())
 
     # ── Excel（openpyxl → 逐格渲染）──────────────────────────────
     @staticmethod
@@ -108,201 +107,53 @@ class FileConverter:
         """XLSX → fitz.Document（每個工作表一頁）"""
         # 優先嘗試 LibreOffice 高品質轉換
         lo_result = FileConverter._libreoffice_to_pdf(path)
-        if lo_result:
-            return fitz.open(lo_result)
+        if lo_result is not None:
+            return lo_result
 
-        # Fallback：openpyxl 純文字渲染
-        import openpyxl
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas as rl_canvas
-        import io
-
-        cjk = _register_cjk_font()
-        wb = openpyxl.load_workbook(path, data_only=True)
-        doc = fitz.open()
-
-        for sheet in wb.worksheets:
-            buf = io.BytesIO()
-            c = rl_canvas.Canvas(buf, pagesize=A4)
-            W, H = A4
-            c.setFont(cjk, 8)
-
-            # 頁面標題
-            c.setFont(cjk, 10)
-            c.drawString(30, H - 30, f"工作表：{sheet.title}")
-            c.setFont(cjk, 8)
-
-            y = H - 50
-            col_width = min(80, (W - 60) / max(sheet.max_column or 1, 1))
-
-            # 欄位標題
-            for col_idx, col in enumerate(sheet.iter_cols(
-                    max_row=1, values_only=True), start=0):
-                pass  # 跳過，直接渲染資料
-
-            for row in sheet.iter_rows(values_only=True):
-                if y < 40:
-                    c.showPage()
-                    c.setFont(cjk, 8)
-                    y = H - 30
-                x = 30
-                for cell in row:
-                    text = str(cell) if cell is not None else ""
-                    text = text[:15]  # 截斷過長
-                    c.drawString(x, y, text)
-                    x += col_width
-                y -= 14
-
-            c.save()
-            buf.seek(0)
-            sheet_doc = fitz.open("pdf", buf.getvalue())
-            doc.insert_pdf(sheet_doc)
-            sheet_doc.close()
-
-        return doc
+        raise RuntimeError("Office 版面轉換需要 LibreOffice。請在依賴管理器安裝，避免截斷儲存格內容。")
 
     # ── Word DOCX ────────────────────────────────────────────────
     @staticmethod
     def docx_to_fitz(path: str) -> fitz.Document:
         """DOCX/DOC → fitz.Document"""
         lo_result = FileConverter._libreoffice_to_pdf(path)
-        if lo_result:
-            return fitz.open(lo_result)
+        if lo_result is not None:
+            return lo_result
 
-        # Fallback：python-docx 純文字渲染
-        from docx import Document as DocxDoc
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
-        import io
-
-        cjk = _register_cjk_font()
-        word = DocxDoc(path)
-        buf = io.BytesIO()
-        pdf_doc = SimpleDocTemplate(buf, pagesize=A4,
-                                    rightMargin=40, leftMargin=40,
-                                    topMargin=40, bottomMargin=40)
-        base_styles = getSampleStyleSheet()
-        # 替換預設字型為中文字型
-        styles = {
-            "Normal": ParagraphStyle("Normal_CJK", parent=base_styles["Normal"],
-                                     fontName=cjk, fontSize=10, leading=14),
-            "Heading1": ParagraphStyle("H1_CJK", parent=base_styles["Heading1"],
-                                       fontName=cjk, fontSize=16, leading=20),
-            "Heading2": ParagraphStyle("H2_CJK", parent=base_styles["Heading2"],
-                                       fontName=cjk, fontSize=13, leading=17),
-        }
-        story = []
-
-        for para in word.paragraphs:
-            text = para.text.strip()
-            if not text:
-                story.append(Spacer(1, 8))
-                continue
-            style_name = "Heading1" if para.style.name.startswith("Heading 1") else \
-                         "Heading2" if para.style.name.startswith("Heading 2") else "Normal"
-            try:
-                story.append(Paragraph(text, styles[style_name]))
-            except Exception:
-                story.append(Paragraph(text, styles["Normal"]))
-            story.append(Spacer(1, 4))
-
-        # 表格
-        tbl_style = ParagraphStyle("Tbl_CJK", fontName=cjk, fontSize=8, leading=10)
-        for table in word.tables:
-            data = []
-            for row in table.rows:
-                data.append([Paragraph(cell.text or "", tbl_style) for cell in row.cells])
-            if data:
-                tbl = Table(data, repeatRows=1)
-                story.append(tbl)
-                story.append(Spacer(1, 8))
-
-        pdf_doc.build(story)
-        buf.seek(0)
-        return fitz.open("pdf", buf.getvalue())
+        raise RuntimeError("Office 版面轉換需要 LibreOffice。請在依賴管理器安裝，避免遺失圖片、表格與版面。")
 
     # ── PPTX ────────────────────────────────────────────────────
     @staticmethod
     def pptx_to_fitz(path: str) -> fitz.Document:
         """PPTX → fitz.Document（每張投影片一頁）"""
         lo_result = FileConverter._libreoffice_to_pdf(path)
-        if lo_result:
-            return fitz.open(lo_result)
+        if lo_result is not None:
+            return lo_result
 
-        # Fallback：python-pptx → 投影片截圖
-        from pptx import Presentation
-        from pptx.util import Inches
-        import io
-
-        prs = Presentation(path)
-        doc = fitz.open()
-
-        slide_w = prs.slide_width.pt
-        slide_h = prs.slide_height.pt
-
-        for slide_num, slide in enumerate(prs.slides):
-            page = doc.new_page(width=slide_w, height=slide_h)
-            # 渲染文字內容（使用 PyMuPDF 內建繁中字型）
-            y = 40
-            for shape in slide.shapes:
-                if hasattr(shape, "text") and shape.text.strip():
-                    page.insert_text(
-                        fitz.Point(20, y),
-                        shape.text[:200],
-                        fontname="china-t",
-                        fontsize=10,
-                        color=(0, 0, 0),
-                    )
-                    y += 18
-                    if y > slide_h - 20:
-                        break
-
-        return doc
+        raise RuntimeError("投影片版面轉換需要 LibreOffice。請在依賴管理器安裝，避免遺失圖表和文字。")
 
     # ── LibreOffice headless（最高品質）─────────────────────────
     @staticmethod
-    def _libreoffice_to_pdf(path: str) -> str | None:
-        """
-        嘗試用 LibreOffice headless 轉 PDF。
-        回傳暫存 PDF 路徑，失敗回傳 None。
-        LibreOffice 搜尋路徑：
-          macOS: /Applications/LibreOffice.app/Contents/MacOS/soffice
-          Windows: C:\\Program Files\\LibreOffice\\program\\soffice.exe
-        """
+    def _libreoffice_to_pdf(path: str) -> fitz.Document | None:
+        """Isolated profile and temporary output, preserving actual Office layout."""
         soffice = FileConverter._find_soffice()
-        if not soffice:
-            return None
-        try:
-            tmp_dir = tempfile.mkdtemp(prefix="acropdf_lo_")
-            run_kwargs = {"capture_output": True, "timeout": 60}
-            # CREATE_NO_WINDOW 只在 Windows 上有效，其他平台不傳
-            if sys.platform == "win32":
-                run_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-            result = subprocess.run(
-                [soffice, "--headless", "--convert-to", "pdf",
-                 "--outdir", tmp_dir, path],
-                **run_kwargs,
-            )
-            if result.returncode != 0:
-                import shutil
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-                return None
-            # 找轉出的 PDF
-            base = os.path.splitext(os.path.basename(path))[0]
-            pdf_path = os.path.join(tmp_dir, base + ".pdf")
-            if not os.path.isfile(pdf_path):
-                import shutil
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-                return None
-            return pdf_path
-        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
-            try:
-                import shutil
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            except Exception:
-                pass
-            return None
+        if not soffice: return None
+        source = Path(path).resolve()
+        if not source.is_file(): raise FileNotFoundError(source)
+        with tempfile.TemporaryDirectory(prefix="acropdf_office_") as stage:
+            stage=Path(stage);profile=stage/"profile";profile.mkdir();output=stage/"output";output.mkdir()
+            (profile/"user").mkdir()
+            (profile/"user/registrymodifications.xcu").write_text('<oor:items xmlns:oor="http://openoffice.org/2001/registry"><item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="MacroSecurityLevel" oor:op="fuse"><value>3</value></prop></item></oor:items>')
+            kwargs={"capture_output":True,"text":True,"timeout":120}
+            if sys.platform == "win32": kwargs['creationflags']=subprocess.CREATE_NO_WINDOW
+            result=subprocess.run([soffice,"-env:UserInstallation="+profile.as_uri(),"--headless","--norestore","--nodefault","--convert-to","pdf","--outdir",str(output),str(source)],**kwargs)
+            target=output/(source.stem+".pdf")
+            if result.returncode or not target.is_file():
+                raise RuntimeError("LibreOffice 無法轉換此檔案："+(result.stderr or result.stdout)[-1000:])
+            raw=target.read_bytes()
+            converted=fitz.open('pdf',raw)
+            if not len(converted): converted.close();raise ValueError("Office 轉換沒有產生任何頁面。")
+            return converted
 
     @staticmethod
     def _find_soffice() -> str | None:

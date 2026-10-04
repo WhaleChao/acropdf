@@ -1,0 +1,7 @@
+sRGB2014.icc is an unmodified profile supplied by the International Color Consortium.
+Source: https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
+License: https://registry.color.org/profile-library/
+This profile is made available by the International Color Consortium, and may be copied,
+distributed, embedded, made, used, and sold without restriction. Altered versions of this
+profile shall have the original identification and copyright information removed and
+shall not be misrepresented as the original profile.

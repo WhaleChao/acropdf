@@ -48,6 +48,7 @@ def test_get_structure_tree(tmp_path):
 def test_reorder_structure(tmp_path):
     _, doc = _make_pdf(tmp_path)
     engine = AccessibilityEngine()
-    # 不應 crash
-    engine.reorder_structure(doc, [0])
+    # 尚未完成的結構操作必須明確失敗，不能回報成功。
+    with pytest.raises(ValueError):
+        engine.reorder_structure(doc, [0])
     doc.close()

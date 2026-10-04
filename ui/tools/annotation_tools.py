@@ -612,10 +612,18 @@ class StampTool(BaseTool):
         if pdf_rect is None:
             self._start = None
             return
-        dlg = _StampChooserDialog(widget)
-        if dlg.exec():
-            stamp = dlg.get_stamp()
-            self.doc.annotations.add_stamp(widget.page_num, pdf_rect, stamp)
+        if self.mode == ToolMode.CUSTOM_STAMP:
+            from ui.dialogs.custom_stamp.custom_stamp_dialog import CustomStampDialog
+            dlg = CustomStampDialog(widget)
+            if dlg.exec() and dlg.get_stamp_path():
+                try:
+                    fitz.Pixmap(dlg.get_stamp_path())
+                    with self.doc.edit_transaction("自訂圖章"):
+                        self.doc.fitz_doc[widget.page_num].insert_image(pdf_rect,filename=dlg.get_stamp_path())
+                except Exception as exc: QMessageBox.warning(widget,"無法插入圖章",str(exc))
+        else:
+            dlg = _StampChooserDialog(widget)
+            if dlg.exec(): self.doc.annotations.add_stamp(widget.page_num,pdf_rect,dlg.get_stamp())
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -1312,7 +1320,7 @@ class ToolFactory:
             ToolMode.SELECT:       SelectTool,
             ToolMode.TEXT_EDIT:     TextEditTool,
             ToolMode.IMAGE_EDIT:   ImageEditTool,
-            ToolMode.CUSTOM_STAMP: StampTool,  # 自訂圖章共用 StampTool
+            ToolMode.CUSTOM_STAMP: StampTool,
         }
         tool_cls = mapping.get(mode)
         return tool_cls(mode, view, doc) if tool_cls else None

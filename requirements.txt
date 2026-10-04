@@ -13,3 +13,4 @@ Pillow
 reportlab
 cryptography
 fonttools
+requests>=2.32

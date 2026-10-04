@@ -117,12 +117,14 @@ class ReflowDialog(QDialog):
 
         from core.text_reflow_engine import TextReflowEngine
         engine = TextReflowEngine()
-        self._doc.begin_op("文字重排")
-        page = self._doc.fitz_doc[self._page_num]
-        new_block = engine.reflow(self._selected_block, new_text)
-        engine.apply_edit(page, self._selected_block, new_block)
-        self._doc.end_op()
-        self._doc._mark_modified()
+        try:
+            with self._doc.edit_transaction("文字重排"):
+                page = self._doc.fitz_doc[self._page_num]
+                new_block = engine.reflow(self._selected_block, new_text)
+                engine.apply_edit(page, self._selected_block, new_block)
+        except Exception as exc:
+            QMessageBox.warning(self, "重排未完成", str(exc))
+            return
 
         QMessageBox.information(self, "完成", "文字重排已套用。")
         self._load_page(self._page_num)

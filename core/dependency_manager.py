@@ -53,7 +53,7 @@ class DependencyManager:
             Dependency(
                 name="LibreOffice",
                 purpose="開啟 Word/Excel/PowerPoint 檔案（高品質轉換）",
-                required=False,  # 有 python-docx/openpyxl fallback
+                required=False,  # Office 匯入需要；PDF 操作不需要
                 install_cmd_mac="brew install --cask libreoffice",
                 install_cmd_win='winget install --id TheDocumentFoundation.LibreOffice --accept-source-agreements --accept-package-agreements',
                 download_url="https://www.libreoffice.org/download/download/",
@@ -61,13 +61,17 @@ class DependencyManager:
             ),
             Dependency(
                 name="Ghostscript",
-                purpose="進階 PDF 壓縮與 PDF/A 轉換",
+                purpose="PDF/A 與 PDF/X 的 ICC／字型轉換",
                 required=False,
                 install_cmd_mac="brew install ghostscript",
                 install_cmd_win='winget install --id ArtifexSoftware.GhostScript --accept-source-agreements --accept-package-agreements',
                 download_url="https://ghostscript.com/releases/gsdnld.html",
                 install_note="",
             ),
+            Dependency(name="Java (veraPDF)",purpose="離線 PDF/A 與 PDF/UA 獨立驗證",required=False,
+                       install_cmd_mac="brew install --cask temurin",
+                       install_cmd_win="winget install --id EclipseAdoptium.Temurin.21.JRE --accept-source-agreements --accept-package-agreements",
+                       download_url="https://adoptium.net/temurin/releases/",install_note="veraPDF 驗證器已附於 AcroPDF，Java 需另行安裝。"),
         ]
 
     # ── 掃描 ─────────────────────────────────────────────────────
@@ -80,6 +84,12 @@ class DependencyManager:
                 self._check_libreoffice(dep)
             elif dep.name == "Ghostscript":
                 self._check_ghostscript(dep)
+            elif dep.name == "Java (veraPDF)":
+                from core.pdf_standards import find_java
+                path = find_java()
+                dep.status = DepStatus.INSTALLED if path else DepStatus.OPTIONAL_MISSING
+                dep.path = path or ""
+                dep.version = self._get_version([path,"-version"]) if path else ""
         return self.deps
 
     def get_missing(self, required_only: bool = False) -> list[Dependency]:
@@ -121,15 +131,9 @@ class DependencyManager:
 
     # ── Ghostscript ──────────────────────────────────────────────
     def _check_ghostscript(self, dep: Dependency):
-        path = self._find_executable("gs", [
-            r"C:\Program Files\gs\gs10.03.0\bin\gswin64c.exe",
-            r"C:\Program Files\gs\gs10.02.1\bin\gswin64c.exe",
-            "/opt/homebrew/bin/gs",
-            "/usr/local/bin/gs",
-        ])
-        # Windows 上叫 gswin64c
-        if not path and sys.platform == "win32":
-            path = self._find_executable("gswin64c", [])
+        from core.pdf_standards import find_executable
+        try: path = find_executable('gs')
+        except (RuntimeError, FileNotFoundError): path = None
         if path:
             dep.status = DepStatus.INSTALLED
             dep.path = path

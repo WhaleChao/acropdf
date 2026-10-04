@@ -9,6 +9,7 @@ class PageDiff:
     visual_rects: list[fitz.Rect] = field(default_factory=list)
     text_added: list[str] = field(default_factory=list)
     text_removed: list[str] = field(default_factory=list)
+    diff_ratio: float = 0.0
 
 class CompareEngine:
     def compare(self, doc_a, doc_b, zoom: float = 1.0,
@@ -23,12 +24,20 @@ class CompareEngine:
                 diff.page_num = i
                 results.append(diff)
 
+            for i in range(count,max(left.page_count,right.page_count)):
+                page=left[i] if i<len(left) else right[i]
+                diff=PageDiff(i)
+                if text:
+                    if i<len(left): diff.text_removed=page.get_text().splitlines()
+                    else: diff.text_added=page.get_text().splitlines()
+                if visual: diff.visual_rects=[page.rect];diff.diff_ratio=1.0
+                results.append(diff)
             extra_a = max(left.page_count - right.page_count, 0)
             extra_b = max(right.page_count - left.page_count, 0)
             pages_with_diff = sum(
                 1 for diff in results
                 if diff.visual_rects or diff.text_added or diff.text_removed
-            ) + extra_a + extra_b
+            )
             return {
                 "page_diffs": results,
                 "pages_compared": count,
@@ -46,32 +55,13 @@ class CompareEngine:
                       zoom: float, text: bool = True, visual: bool = True) -> PageDiff:
         diff = PageDiff(page_num=0)
 
-        # 視覺差異（像素 XOR）
         if visual:
-            mat = fitz.Matrix(zoom, zoom)
-            pix_a = page_a.get_pixmap(matrix=mat, alpha=False)
-            pix_b = page_b.get_pixmap(matrix=mat, alpha=False)
-            if pix_a.size == pix_b.size:
-                data_a = pix_a.samples
-                data_b = pix_b.samples
-                threshold = 10
-                stride = pix_a.stride
-                w, h = pix_a.width, pix_a.height
-                diff_pixels = []
-                for y in range(h):
-                    for x in range(w):
-                        off = y * stride + x * 3
-                        if (abs(data_a[off] - data_b[off]) > threshold or
-                            abs(data_a[off+1] - data_b[off+1]) > threshold or
-                            abs(data_a[off+2] - data_b[off+2]) > threshold):
-                            diff_pixels.append((x / zoom, y / zoom))
-                if diff_pixels:
-                    xs = [p[0] for p in diff_pixels]
-                    ys = [p[1] for p in diff_pixels]
-                    diff.visual_rects.append(fitz.Rect(
-                        min(xs) - 2, min(ys) - 2,
-                        max(xs) + 2, max(ys) + 2
-                    ))
+            mask, scale = self._difference_mask(page_a, page_b, zoom)
+            box = mask.getbbox()
+            if box: diff.visual_rects.append(fitz.Rect(*(n/scale for n in box)))
+            histogram=mask.histogram(); diff.diff_ratio=(sum(histogram[1:])/max(1,mask.width*mask.height))
+            if page_a.rect != page_b.rect and not box:
+                diff.visual_rects.append(page_a.rect | page_b.rect);diff.diff_ratio=1.0
 
         # 文字差異
         if text:
@@ -84,6 +74,25 @@ class CompareEngine:
                     diff.text_removed.append(line[1:])
 
         return diff
+
+    @staticmethod
+    def _difference_mask(page_a,page_b,zoom):
+        import math
+        from PIL import Image, ImageChops
+        if not math.isfinite(zoom) or zoom<=0: raise ValueError("比對縮放倍率必須有效且大於零。")
+        area=max(page_a.rect.width*page_a.rect.height,page_b.rect.width*page_b.rect.height,1)
+        scale=min(zoom,math.sqrt(24_000_000/area),16384/max(page_a.rect.width,page_a.rect.height,page_b.rect.width,page_b.rect.height))
+        images=[]
+        for page in (page_a,page_b):
+            pix=page.get_pixmap(matrix=fitz.Matrix(scale,scale),colorspace=fitz.csRGB,alpha=False)
+            images.append(Image.frombytes('RGB',(pix.width,pix.height),pix.samples))
+        width=max(i.width for i in images);height=max(i.height for i in images)
+        padded=[]
+        for image in images:
+            canvas=Image.new('RGB',(width,height),'white');canvas.paste(image,(0,0));padded.append(canvas)
+        channels=ImageChops.difference(*padded).split()
+        maximum=ImageChops.lighter(ImageChops.lighter(channels[0],channels[1]),channels[2])
+        return maximum.point(lambda p:255 if p>10 else 0),scale
 
     # ── 公開輔助方法（供 compare_result_dialog 使用）──────────────
 
@@ -107,7 +116,7 @@ class CompareEngine:
         for d in result["page_diffs"]:
             out.append({
                 "page": d.page_num,
-                "diff_ratio": len(d.visual_rects),
+                "diff_ratio": d.diff_ratio,
                 "rects": d.visual_rects,
             })
         return out
@@ -122,35 +131,13 @@ class CompareEngine:
                 return []
             page_a = doc_a[page_num]
             page_b = doc_b[page_num]
-            zoom = 1.0
-            mat = fitz.Matrix(zoom, zoom)
-            pix_a = page_a.get_pixmap(matrix=mat, alpha=False)
-            pix_b = page_b.get_pixmap(matrix=mat, alpha=False)
-            clusters: list[fitz.Rect] = []
-            if pix_a.size != pix_b.size:
-                return clusters
-            data_a = pix_a.samples
-            data_b = pix_b.samples
-            threshold = 10
-            stride = pix_a.stride
-            w, h = pix_a.width, pix_a.height
-            CLUSTER_SIZE = 20  # 每 20px 一格
-            buckets: dict[tuple, list[tuple]] = {}
-            for y in range(h):
-                for x in range(w):
-                    off = y * stride + x * 3
-                    if (abs(data_a[off] - data_b[off]) > threshold or
-                            abs(data_a[off + 1] - data_b[off + 1]) > threshold or
-                            abs(data_a[off + 2] - data_b[off + 2]) > threshold):
-                        key = (x // CLUSTER_SIZE, y // CLUSTER_SIZE)
-                        buckets.setdefault(key, []).append((x / zoom, y / zoom))
-            for pts in buckets.values():
-                xs = [p[0] for p in pts]
-                ys = [p[1] for p in pts]
-                clusters.append(fitz.Rect(
-                    min(xs) - 1, min(ys) - 1,
-                    max(xs) + 1, max(ys) + 1
-                ))
+            mask, scale = self._difference_mask(page_a,page_b,1)
+            clusters = []
+            for y in range(0,mask.height,20):
+                for x in range(0,mask.width,20):
+                    crop=mask.crop((x,y,min(x+20,mask.width),min(y+20,mask.height)))
+                    box=crop.getbbox()
+                    if box: clusters.append(fitz.Rect((box[0]+x)/scale,(box[1]+y)/scale,(box[2]+x)/scale,(box[3]+y)/scale))
             return clusters
         finally:
             doc_a.close()
@@ -159,37 +146,27 @@ class CompareEngine:
     def generate_diff_report(self, path_a: str, path_b: str,
                              output_path: str, results: dict):
         """產生並排對照 PDF 報告"""
-        doc_a = fitz.open(path_a)
-        doc_b = fitz.open(path_b)
-        report = fitz.open()
-        page_diffs = results.get("page_diffs", [])
-        count = min(doc_a.page_count, doc_b.page_count)
-        for i in range(count):
-            pix_a = doc_a[i].get_pixmap(matrix=fitz.Matrix(0.7, 0.7), alpha=False)
-            pix_b = doc_b[i].get_pixmap(matrix=fitz.Matrix(0.7, 0.7), alpha=False)
-            # 建立 A4 橫式頁面
-            page_w = pix_a.width + pix_b.width + 30
-            page_h = max(pix_a.height, pix_b.height) + 50
-            page = report.new_page(width=page_w, height=page_h)
-            page.insert_image(fitz.Rect(0, 40, pix_a.width, 40 + pix_a.height),
-                              pixmap=pix_a)
-            page.insert_image(fitz.Rect(pix_a.width + 30, 40,
-                                        pix_a.width + 30 + pix_b.width,
-                                        40 + pix_b.height),
-                              pixmap=pix_b)
-            # 標記差異
-            diff = next((d for d in page_diffs if d.page_num == i), None)
-            if diff and diff.visual_rects:
-                for rect in diff.visual_rects:
-                    r = fitz.Rect(rect.x0 * 0.7, rect.y0 * 0.7 + 40,
-                                  rect.x1 * 0.7, rect.y1 * 0.7 + 40)
-                    page.draw_rect(r, color=(1, 0, 0), width=1)
-            # 頁碼
-            page.insert_text((10, 20), f"第 {i + 1} 頁比較", fontsize=10)
-        report.save(output_path, garbage=4, deflate=True)
-        doc_a.close()
-        doc_b.close()
-        report.close()
+        from core.file_io import atomic_output
+        import os
+        if os.path.realpath(output_path) in (os.path.realpath(path_a),os.path.realpath(path_b)):
+            raise ValueError("比對報告不能覆寫任何來源。")
+        with fitz.open(path_a) as doc_a, fitz.open(path_b) as doc_b, fitz.open() as report:
+            for i in range(max(len(doc_a),len(doc_b))):
+                images=[]
+                for source in (doc_a,doc_b):
+                    images.append(source[i].get_pixmap(matrix=fitz.Matrix(.7,.7),alpha=False) if i<len(source) else None)
+                width=max(pix.width for pix in images if pix is not None);height=max(pix.height for pix in images if pix is not None)
+                page=report.new_page(width=width*2+30,height=height+50)
+                for column,pix in enumerate(images):
+                    x=column*(width+30)
+                    if pix is None: page.insert_text((x+10,80),"此版本沒有此頁",fontname="china-t",fontsize=12)
+                    else: page.insert_image(fitz.Rect(x,40,x+pix.width,40+pix.height),pixmap=pix)
+                diff=next((d for d in results.get('page_diffs',[]) if d.page_num==i),None)
+                if diff:
+                    for rect in diff.visual_rects:
+                        page.draw_rect(fitz.Rect(rect.x0*.7,rect.y0*.7+40,rect.x1*.7,rect.y1*.7+40),color=(1,0,0))
+                page.insert_text((10,20),f"第 {i+1} 頁比較",fontname="china-t",fontsize=10)
+            with atomic_output(output_path) as stage: report.save(stage,garbage=4,deflate=True)
 
     @staticmethod
     def _open_if_needed(doc_or_path):

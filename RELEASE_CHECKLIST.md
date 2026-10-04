@@ -34,3 +34,14 @@ spctl --assess --type open --context context:primary-signature -vv dist/AcroPDF.
 ```powershell
 Get-AuthenticodeSignature dist\AcroPDF\AcroPDF.exe
 ```
+
+## 1.1.0 品質與商用發佈關卡
+
+- [ ] 保留完整測試日誌、視覺回顧 `validation.json`、依賴清單與 checksum。
+- [ ] macOS 最終 bundle 修改完畢後重新簽署並通過 `codesign --verify --deep --strict`。
+- [ ] 在 Windows 真實執行 CI 與安裝／文件工作流；未執行前不能宣稱跨平台通過。
+- [ ] 完成 PyQt、PyMuPDF、字型及其他套件的商用再散布授權審查。
+- [ ] 正式公開版本完成 Developer ID、公證及 Windows 程式碼簽章。
+- [ ] PDF/A／X／UA 等功能只有通過相應外部驗證器才可開啟合規宣告。
+- [ ] 以原始文件語料完成內容保留、OCR、Office 保真、簽章信任、列印與視障操作驗收。
+- [ ] 完成 `docs/QUALITY_REVIEW.md` 的 P0/P1 門檻後才可標為可商用；獎項必須有實際評審結果。

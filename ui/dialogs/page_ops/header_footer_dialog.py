@@ -55,22 +55,11 @@ class HeaderFooterDialog(QDialog):
 
     def _apply(self):
         try:
-            parts = []
-            for t in [self._hdr_left.text(), self._hdr_center.text(), self._hdr_right.text()]:
-                if t:
-                    parts.append(t)
-            header = "  ".join(parts) if parts else ""
-
-            fparts = []
-            for t in [self._ftr_left.text(), self._ftr_center.text(), self._ftr_right.text()]:
-                if t:
-                    fparts.append(t)
-            footer = "  ".join(fparts) if fparts else ""
-
             self._doc.pages.add_header_footer(
-                header=header,
-                footer=footer,
-                fontsize=float(self._font_size.value()),
+                header=self._hdr_center.text(), footer=self._ftr_center.text(),
+                header_left=self._hdr_left.text(), header_right=self._hdr_right.text(),
+                footer_left=self._ftr_left.text(), footer_right=self._ftr_right.text(),
+                fontsize=float(self._font_size.value()), margin=self._margin.value(),
             )
             QMessageBox.information(self, "完成", "頁首/頁尾已套用")
             self.accept()

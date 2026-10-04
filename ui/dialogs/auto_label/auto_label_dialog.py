@@ -58,7 +58,10 @@ class _DetectWorker(QThread):
 
 # ────────────────────────────── Dialog ───────────────────────────────
 
-class AutoLabelDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class AutoLabelDialog(WorkerDialog):
     def __init__(self, doc, parent=None):
         super().__init__(parent)
         self._doc        = doc
@@ -312,9 +315,3 @@ class AutoLabelDialog(QDialog):
             "請儲存 PDF 以保留變更。",
         )
         self.accept()
-
-    def closeEvent(self, event):
-        if self._worker and self._worker.isRunning():
-            self._worker.terminate()
-            self._worker.wait()
-        super().closeEvent(event)

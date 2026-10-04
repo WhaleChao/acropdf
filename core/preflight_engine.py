@@ -63,7 +63,7 @@ class PreflightEngine:
                     seen[name] = {
                         "name": name,
                         "type": font_type,
-                        "embedded": xref > 0,
+                        "embedded": xref > 0 and bool(doc.extract_font(xref)[3]),
                         "subset": "+" in name,
                         "pages": [],
                         "xref": xref,
@@ -84,9 +84,9 @@ class PreflightEngine:
                     w = info.get("width", 0)
                     h = info.get("height", 0)
                     cs = info.get("colorspace", 0)
-                    # 估算 DPI（以頁面 pt 為基礎）
-                    page_w_pt = page.rect.width
-                    dpi = round(w / page_w_pt * 72) if page_w_pt else 0
+                    placements = page.get_image_rects(xref)
+                    valid = [rect for rect in placements if rect.width > 0 and rect.height > 0]
+                    dpi = min((round(min(w / rect.width, h / rect.height) * 72) for rect in valid), default=0)
                     cs_name = _cs_name(cs)
                     results.append({
                         "page": i,
@@ -116,12 +116,14 @@ class PreflightEngine:
         return list(spaces)
 
     def check_transparency(self, doc: fitz.Document) -> list[int]:
-        """回傳含有透明度的頁碼（偵測 /Group 或 /SMask）"""
+        """Report painted opacity below 1 and image soft masks, avoiding opacity=1 false positives."""
         pages_with_transparency = []
         for i in range(doc.page_count):
             page = doc[i]
-            text = page.get_svg_image()  # 含 transparency 會有 opacity 屬性
-            if "opacity" in text.lower() or "smask" in text.lower():
+            transparent = any(img[1] > 0 for img in page.get_images(full=True))
+            transparent |= any(item.get('opacity', 1) < 1 for item in page.get_texttrace())
+            transparent |= any(item.get('fill_opacity', 1) < 1 or item.get('stroke_opacity', 1) < 1 for item in page.get_drawings())
+            if transparent:
                 pages_with_transparency.append(i)
         return pages_with_transparency
 
@@ -169,8 +171,8 @@ class PreflightEngine:
             if min_dpi and dpi and dpi < min_dpi:
                 report.issues.append(PreflightIssue(
                     severity="warning", category="圖片", page=img["page"],
-                    message=f"圖片 DPI={dpi} 低於建議值 {min_dpi}",
-                    auto_fixable=True,
+                    message=f"圖片 DPI={dpi} 低於建議值 {min_dpi}（需更高解析度來源）",
+                    auto_fixable=False,
                 ))
             if max_dpi and dpi and dpi > max_dpi:
                 report.issues.append(PreflightIssue(
@@ -197,21 +199,10 @@ class PreflightEngine:
 
     def fix_downsample_images(self, doc: fitz.Document, target_dpi: int = 150):
         """自動修正：降低圖片解析度（就地修改）"""
-        for i in range(doc.page_count):
-            page = doc[i]
-            for img in page.get_images(full=True):
-                xref = img[0]
-                try:
-                    info = doc.extract_image(xref)
-                    w, h = info["width"], info["height"]
-                    if w > target_dpi * 10:  # 極大圖才處理
-                        pix = fitz.Pixmap(doc, xref)
-                        new_w = min(w, target_dpi * 10)
-                        new_h = round(h * new_w / w)
-                        pix = pix.shrink(max(1, w // new_w))
-                        doc.update_stream(xref, pix.tobytes())
-                except Exception:
-                    pass
+        if not 72 <= target_dpi <= 600:
+            raise ValueError('目標 DPI 須介於 72 與 600。')
+        doc.rewrite_images(dpi_threshold=int(target_dpi * 1.25), dpi_target=target_dpi,
+                           lossy=True, lossless=True, bitonal=False)
 
 
 def _cs_name(cs: int) -> str:

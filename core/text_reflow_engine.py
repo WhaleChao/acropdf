@@ -67,8 +67,9 @@ class TextReflowEngine:
     def calculate_char_width(self, font_name: str, font_size: float,
                              char: str) -> float:
         """估算字元寬度（用字型大小比例估算）"""
-        # 若有 fontTools 可做精確計算，否則以字型大小 * 0.6 估算
-        return font_size * 0.6
+        if font_size <= 0: raise ValueError("字級必須大於零。")
+        font = fitz.Font(fontname="china-t" if any(ord(c)>255 for c in char) else _safe_font(font_name))
+        return float(font.text_length(char,fontsize=font_size))
 
     def reflow(self, block: TextBlock, new_text: str) -> TextBlock:
         """重新排版段落文字"""
@@ -81,22 +82,16 @@ class TextReflowEngine:
 
         x0, y0, x1, y1 = block.rect
         width = x1 - x0
-        char_w = self.calculate_char_width(font_name, font_size, "A")
-        chars_per_line = max(1, int(width / char_w))
-
-        # 按字元寬度換行
-        words = new_text.split()
+        if width <= 0: raise ValueError("段落寬度必須大於零。")
         lines = []
-        current_line = ""
-        for word in words:
-            test = (current_line + " " + word).strip()
-            if len(test) * char_w <= width:
-                current_line = test
-            else:
-                if current_line:
-                    lines.append(current_line)
-                current_line = word
-        if current_line:
+        for paragraph in new_text.replace("\r\n", "\n").split("\n"):
+            current_line = ""
+            for char in paragraph:
+                candidate = current_line + char
+                measured = sum(self.calculate_char_width(font_name,font_size,c) for c in candidate)
+                if measured > width and current_line:
+                    lines.append(current_line);current_line = char
+                else: current_line = candidate
             lines.append(current_line)
 
         # 建立新的 spans
@@ -108,10 +103,10 @@ class TextReflowEngine:
                 font=font_name,
                 size=font_size,
                 color=color,
-                origin=(x0, y0 + i * line_height),
+                origin=(x0, ref_span.origin[1] + i * line_height),
             ))
 
-        new_rect = (x0, y0, x1, y0 + len(lines) * line_height)
+        new_rect = (x0, y0, x1, max(y1, ref_span.origin[1] + max(0,len(lines)-1) * line_height + font_size*.3))
         return TextBlock(spans=new_spans, rect=new_rect, alignment=block.alignment,
                          line_spacing=block.line_spacing)
 
@@ -120,31 +115,26 @@ class TextReflowEngine:
         """套用編輯：刪除舊區塊 → 寫入新排版"""
         x0, y0, x1, y1 = old_block.rect
         old_rect = fitz.Rect(x0, y0, x1, y1)
-        page.add_redact_annot(old_rect)
-        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
-
+        target = fitz.Rect(new_block.rect)
+        if not (page.rect*page.derotation_matrix).contains(target): raise ValueError("重排段落超出頁面。")
+        if any(a.type[0]==fitz.PDF_ANNOT_REDACT for a in page.annots() or ()): raise ValueError("請先處理待套用的塗黑標記。")
+        for word in page.get_text("words"):
+            rect = fitz.Rect(word[:4])
+            if rect.intersects(target) and not old_rect.contains(rect): raise ValueError("重排會覆蓋相鄰文字，原文已保留。")
+        for span in new_block.spans:
+            font=fitz.Font(fontname="china-t" if any(ord(c)>255 for c in span.text) else _safe_font(span.font))
+            if any(not c.isspace() and not font.has_glyph(ord(c)) for c in span.text): raise ValueError("字型缺少段落所需字元。")
+        page.add_redact_annot(old_rect,fill=False)
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE,graphics=fitz.PDF_REDACT_LINE_ART_NONE)
         for span in new_block.spans:
             if span.text.strip():
-                page.insert_text(
-                    span.origin,
-                    span.text,
-                    fontname=_safe_font(span.font),
-                    fontsize=span.size,
-                    color=span.color,
-                )
+                page.insert_text(span.origin,span.text,fontname="china-t" if any(ord(c)>255 for c in span.text) else _safe_font(span.font),fontsize=span.size,color=span.color)
 
 
 def _int_to_rgb(color_int: int) -> tuple:
-    r = ((color_int >> 16) & 0xFF) / 255.0
-    g = ((color_int >> 8) & 0xFF) / 255.0
-    b = (color_int & 0xFF) / 255.0
-    return (r, g, b)
+    return tuple(((color_int>>shift)&255)/255 for shift in (16,8,0))
 
 
 def _safe_font(font_name: str) -> str:
-    """回傳 fitz 可辨識的字型名稱，fallback 到 helv"""
-    safe = {"helv", "Helvetica", "tiro", "TiRo", "cjk", "cour", "Courier",
-            "times", "Times-Roman", "symb", "zadb"}
-    if font_name in safe:
-        return font_name
-    return "helv"
+    names={"Helvetica":"helv", "Times-Roman":"tiro", "Courier":"cour"}
+    return names.get(font_name,font_name if font_name in {"helv","tiro","cour","symb","zadb","cjk","china-t"} else "helv")

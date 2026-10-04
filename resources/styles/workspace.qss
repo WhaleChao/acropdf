@@ -1,0 +1,102 @@
+/* AcroPDF — quiet precision. Tokens are shared by the entire application. */
+QWidget { color: @text; font-size: 13px; }
+QMainWindow, QDialog, QMessageBox { background: @bg; }
+QToolTip { color: @text; background: @surface; border: 1px solid @border; padding: 6px; }
+QLabel { background: transparent; }
+QLabel[role="muted"], #welcomeHint, #welcomeEyebrow, #toolGroupTitle, #pageTotalLabel, #zoomPctLabel { color: @muted; }
+QLabel#brandName { font-size: 17px; font-weight: 700; letter-spacing: 1px; }
+#workspaceHeader { background: @surface; border-bottom: 1px solid @border; }
+#localBadge { color: @accent; background: @tint; border-radius: 12px; padding: 6px 12px; font-size: 11px; font-weight: 600; }
+#commandButton { text-align: left; color: @muted; background: @raised; min-width: 170px; }
+QToolBar { background: @surface; border: none; border-bottom: 1px solid @border; spacing: 3px; padding: 6px 10px; }
+QToolBar::separator { background: @border; width: 1px; margin: 6px 7px; }
+QToolButton { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 6px 9px; }
+QToolButton:hover { background: @tint; }
+QToolButton:checked { color: @accent; background: @tint; border-color: @accent; }
+QPushButton { background: @surface; border: 1px solid @border; border-radius: 7px; padding: 8px 14px; min-height: 16px; }
+QPushButton:hover { background: @tint; border-color: @accent; }
+QPushButton:pressed, QToolButton:pressed { background: @tint; border-color: @accent; }
+QPushButton:focus, QToolButton:focus { border: 1px solid @accent; }
+QPushButton:disabled, QToolButton:disabled { color: @disabled; background: @raised; border-color: @border; }
+QPushButton:default, QPushButton[role="primary"] { background: @accent; color: @bg; border-color: @accent; font-weight: 600; }
+QPushButton:default:hover, QPushButton[role="primary"]:hover { background: @text; border-color: @text; }
+QPushButton#closePdfButton { background: transparent; color: @muted; padding: 6px 9px; }
+QPushButton#closePdfButton:hover { color: @text; background: @tint; }
+#leftPanel, #sideStack, #toolsCenterBody { background: @raised; }
+#sideNav { background: @surface; border-right: 1px solid @border; }
+QPushButton#sideNavButton { background: transparent; border: 1px solid transparent; padding: 12px 6px; font-size: 12px; }
+QPushButton#sideNavButton:hover { background: @raised; }
+QPushButton#sideNavButton:checked { color: @accent; background: @tint; border-color: @border; font-weight: 600; }
+QPushButton#sideNavButton:focus { border-color: @accent; }
+QScrollArea#toolsCenter { border: none; }
+#toolsCenterTitle { font-size: 21px; font-weight: 700; padding: 8px 2px; }
+#toolGroup { border: 1px solid @border; border-radius: 9px; background: @surface; }
+#toolGroupTitle { font-weight: 600; font-size: 11px; padding: 2px 3px; }
+QPushButton#toolCenterButton { text-align: left; padding: 7px 10px; background: transparent; border: 1px solid transparent; }
+QPushButton#toolCenterButton:hover, QPushButton#toolCenterButton:focus { background: @tint; border-color: @border; color: @accent; }
+QPushButton#toolCenterButton:disabled { color: @disabled; }
+#welcomePanel { background: @bg; }
+#welcomeEyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2px; }
+#welcomeTitle { font-size: 42px; font-weight: 700; }
+#welcomeSubtitle { color: @muted; font-size: 14px; }
+#welcomeSectionTitle { font-size: 14px; font-weight: 600; }
+#welcomeRecent { border: 1px solid @border; background: @surface; border-radius: 12px; }
+QPushButton#recentFileButton { text-align: left; padding: 10px 12px; background: @raised; }
+#workflowCard { text-align: left; background: @surface; border: 1px solid @border; border-radius: 10px; padding: 14px; }
+#workflowCard:hover, #workflowCard:focus { border-color: @accent; background: @tint; }
+#emptyRecent { color: @muted; padding: 12px 0; }
+QTabWidget::pane { border: none; }
+QTabBar { background: @raised; }
+QTabBar::tab { color: @muted; background: @raised; border: none; border-right: 1px solid @border; padding: 11px 20px; min-width: 100px; max-width: 260px; }
+QTabBar::tab:selected { color: @accent; background: @surface; border-bottom: 2px solid @accent; }
+QTabBar::tab:hover { background: @tint; }
+QAbstractItemView { background: @surface; border: 1px solid @border; border-radius: 6px; selection-background-color: @tint; selection-color: @text; alternate-background-color: @raised; }
+QAbstractItemView::item { padding: 5px; }
+QAbstractItemView::item:selected { color: @accent; background: @tint; }
+QAbstractItemView::item:hover { background: @raised; }
+QHeaderView::section { background: @raised; color: @muted; border: none; border-bottom: 1px solid @border; padding: 7px; }
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QPlainTextEdit { background: @surface; color: @text; border: 1px solid @border; border-radius: 6px; padding: 6px 9px; selection-background-color: @accent; selection-color: @bg; }
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus { border-color: @accent; }
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled { color: @disabled; background: @raised; }
+QComboBox { padding-right: 22px; }
+QComboBox::drop-down { border: none; width: 18px; }
+QComboBox QAbstractItemView { background: @surface; padding: 4px; }
+QGroupBox { background: @surface; border: 1px solid @border; border-radius: 9px; margin-top: 16px; padding: 12px; }
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; color: @muted; }
+QMenuBar { background: @surface; color: @text; }
+QMenuBar::item:selected { background: @tint; }
+QMenu { background: @surface; color: @text; border: 1px solid @border; padding: 5px; }
+QMenu::item { padding: 7px 24px; border-radius: 4px; }
+QMenu::item:selected { background: @tint; color: @accent; }
+QMenu::item:disabled { color: @disabled; }
+QMenu::separator { height: 1px; background: @border; margin: 4px 9px; }
+QCheckBox, QRadioButton { spacing: 7px; padding: 4px; }
+QProgressBar { border: 1px solid @border; border-radius: 5px; background: @raised; text-align: center; min-height: 12px; }
+QProgressBar::chunk { background: @accent; border-radius: 4px; }
+QStatusBar { background: @surface; border-top: 1px solid @border; padding: 3px 12px; color: @muted; font-size: 11px; }
+QStatusBar::item { border: none; }
+QStatusBar QLabel { color: @muted; font-size: 11px; }
+QPushButton#zoomOutBtn, QPushButton#zoomInBtn { background: transparent; padding: 0; font-size: 18px; border: 1px solid transparent; }
+QPushButton#zoomOutBtn:focus, QPushButton#zoomInBtn:focus { border-color: @accent; }
+QSlider::groove:horizontal { background: @border; height: 3px; border-radius: 1px; }
+QSlider::sub-page:horizontal { background: @accent; }
+QSlider::handle:horizontal { background: @accent; border: 2px solid @surface; width: 12px; height: 12px; margin: -6px 0; border-radius: 7px; }
+QSlider:focus::handle:horizontal { border-color: @text; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
+QScrollBar::handle:vertical { background: @border; border-radius: 4px; min-height: 30px; margin: 1px; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 0; }
+QScrollBar::handle:horizontal { background: @border; border-radius: 4px; min-width: 30px; margin: 1px; }
+QScrollBar::handle:hover { background: @muted; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+QSplitter::handle { background: @border; width: 1px; }
+#searchBar { background: @surface; border-bottom: 1px solid @border; }
+#searchBar QPushButton { padding: 0; min-height: 0; }
+#commandInput { font-size: 18px; padding: 14px; }
+#commandResults { border: none; background: @surface; }
+#commandResults::item { padding: 12px; border-radius: 5px; }
+#pdfViewport, #pdfCanvas { background: @canvas; }
+QFrame[frameShape="4"] { color: @border; }
+QComboBox QLineEdit { border: none; padding: 0; background: transparent; }
+QTabBar::close-button { image: url("@icons/tab-close.svg"); width: 16px; height: 16px; border-radius: 4px; }
+QTabBar::close-button:hover { background: @tint; }

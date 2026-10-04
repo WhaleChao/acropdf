@@ -33,8 +33,8 @@ jobs:
         run: |
           choco install innosetup --no-progress -y
           python -m pip install --upgrade pip
-          python -m pip install -r requirements_win.txt
-          python -m pip install pyinstaller pytest
+          python -m pip install -r requirements-lock.txt
+          python -m pip check
 
       - name: Run tests
         shell: pwsh

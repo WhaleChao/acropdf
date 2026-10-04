@@ -32,7 +32,8 @@ class FontDialog(QDialog):
         layout.addWidget(self._table)
 
         btn_row = QHBoxLayout()
-        embed_btn = QPushButton("嵌入字型...")
+        embed_btn = QPushButton("替換並嵌入字型...")
+        embed_btn.setToolTip("套用指定字型並檢查缺字；較寬的文字會縮小至原區域。")
         embed_btn.clicked.connect(self._embed_font)
         btn_row.addWidget(embed_btn)
 
@@ -40,9 +41,10 @@ class FontDialog(QDialog):
         extract_btn.clicked.connect(self._extract_font)
         btn_row.addWidget(extract_btn)
 
-        embed_all_btn = QPushButton("全部嵌入（佔位）")
-        embed_all_btn.clicked.connect(self._embed_all)
-        btn_row.addWidget(embed_all_btn)
+        subset_btn = QPushButton("子集化文件字型")
+        subset_btn.clicked.connect(self._subset_fonts)
+        btn_row.addWidget(subset_btn)
+
 
         btn_row.addStretch()
         refresh_btn = QPushButton("重新整理")
@@ -121,3 +123,13 @@ class FontDialog(QDialog):
             "全部嵌入功能需要對應的字型檔案。\n"
             "請逐一選取未嵌入字型並指定字型檔案路徑。"
         )
+
+    def _subset_fonts(self):
+        selected = self._selected_font()
+        if selected is None:
+            return
+        try:
+            self._fm.subset_font(selected.name)
+            self._load_fonts()
+        except Exception as exc:
+            QMessageBox.critical(self, "子集化失敗", str(exc))

@@ -25,7 +25,7 @@ CAPABILITIES = [
     {"id": "forms", "category": "表單", "label": "辨識、填寫、建立、匯入匯出與扁平化"},
     {"id": "sign", "category": "簽署", "label": "簽名欄、憑證簽章與驗證"},
     {"id": "ocr", "category": "OCR", "label": "掃描頁文字化與可搜尋 PDF"},
-    {"id": "convert", "category": "轉換", "label": "Word、Excel、PowerPoint、圖片、文字、HTML、PDF/A 與 PDF/X"},
+    {"id": "convert", "category": "轉換", "label": "Word、Excel、PowerPoint、圖片、文字與 HTML；標準 PDF 轉換依引擎與驗證器能力"},
     {"id": "protect", "category": "保護", "label": "AES-256、權限、永久遮蔽、預檢與無障礙"},
     {"id": "batch", "category": "批次", "label": "浮水印、頁首頁尾、Bates 編號、分割與智慧歸檔"},
     {"id": "magi", "category": "MAGI", "label": "摘要、翻譯、分類與法律文件分析"},

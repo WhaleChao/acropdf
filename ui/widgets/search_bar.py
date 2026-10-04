@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QPushButton, QLabel,
 )
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal, Qt, QEvent
 from PyQt6.QtGui import QKeySequence, QShortcut
 
 
@@ -20,7 +20,7 @@ class SearchBar(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("searchBar")
-        self.setFixedHeight(36)
+        self.setFixedHeight(46)
         # 不設 inline stylesheet — 由 QSS 主題檔控制
 
         layout = QHBoxLayout(self)
@@ -32,6 +32,7 @@ class SearchBar(QWidget):
         self._input.setPlaceholderText("搜尋…")
         self._input.setClearButtonEnabled(True)
         self._input.returnPressed.connect(self._on_return)
+        self._input.installEventFilter(self)
         self._input.textChanged.connect(self._on_text_changed)
         layout.addWidget(self._input)
 
@@ -65,9 +66,20 @@ class SearchBar(QWidget):
 
         # Escape 與 Shift+Enter 快捷鍵
         esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        esc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         esc.activated.connect(self._on_close)
 
+        self._input.setAccessibleName("搜尋文件文字")
+        self._prev_btn.setAccessibleName("上一筆搜尋結果")
+        self._next_btn.setAccessibleName("下一筆搜尋結果")
         self.hide()
+
+    def eventFilter(self, watched, event):
+        if watched is self._input and event.type() == QEvent.Type.KeyPress:
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self.prev_requested.emit()
+                return True
+        return super().eventFilter(watched, event)
 
     # ── public helpers ───────────────────────────────────────────
     def focus_input(self):
@@ -76,6 +88,8 @@ class SearchBar(QWidget):
         self._input.selectAll()
 
     def set_result_count(self, current: int, total: int):
+        self._prev_btn.setEnabled(total > 0)
+        self._next_btn.setEnabled(total > 0)
         if total == 0:
             if self._input.text():
                 self._count_label.setText("無結果")
@@ -96,9 +110,8 @@ class SearchBar(QWidget):
 
     def _on_text_changed(self, text: str):
         text = text.strip()
-        if text:
-            self.search_requested.emit(text)
-        else:
+        self.search_requested.emit(text)
+        if not text:
             self._count_label.setText("")
 
     def _on_close(self):

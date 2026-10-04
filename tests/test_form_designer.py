@@ -13,7 +13,7 @@ def _blank_pdf(tmp_path, name="form.pdf"):
 
 
 def test_add_radio_button(tmp_path):
-    """Radio button 以 checkbox 實作（無 AcroForm parent 時的相容做法）"""
+    """Radio button 使用標準 AcroForm 群組"""
     pdf = _blank_pdf(tmp_path)
     pdoc = PDFDocument()
     pdoc.open(pdf)
@@ -24,8 +24,9 @@ def test_add_radio_button(tmp_path):
 
     check = fitz.open(str(out))
     widgets = list(check[0].widgets())
-    # 使用 checkbox 模擬，確認有 2 個 widget 即可
-    assert len(widgets) >= 2
+    # 群組內各選項必須是標準 radio widget。
+    assert len(widgets) == 2
+    assert all(w.field_type == fitz.PDF_WIDGET_TYPE_RADIOBUTTON for w in widgets)
     check.close()
 
 
@@ -55,6 +56,9 @@ def test_tab_order(tmp_path):
     out = tmp_path / "out.pdf"
     pdoc.save(str(out))
     assert out.exists()
+    with fitz.open(out) as check:
+        assert [w.field_name for w in check[0].widgets()] == ["field_c", "field_a", "field_b"]
+        assert check.xref_get_key(check[0].xref, "Tabs")[1] == "/W"
 
 
 def test_get_all_fields(tmp_path):

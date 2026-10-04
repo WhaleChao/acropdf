@@ -26,7 +26,10 @@ class _PreflightWorker(QThread):
         self.finished.emit(report)
 
 
-class PreflightDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class PreflightDialog(WorkerDialog):
     def __init__(self, doc, parent=None):
         super().__init__(parent)
         self._doc = doc
@@ -84,6 +87,8 @@ class PreflightDialog(QDialog):
         layout.addLayout(bottom)
 
     def _run(self):
+        if self.running_workers():
+            return
         if self._doc.fitz_doc is None:
             QMessageBox.warning(self, "錯誤", "請先開啟 PDF 文件")
             return
@@ -92,8 +97,11 @@ class PreflightDialog(QDialog):
             profile = "高品質列印"
         self._progress.show()
         self._tree.clear()
-        self._worker = _PreflightWorker(self._doc.fitz_doc, profile, self)
-        self._worker.finished.connect(self._on_done)
+        from ui.widgets.operation_worker import OperationWorker
+        self._worker = OperationWorker(self._doc, lambda doc: PreflightEngine().full_preflight(doc.fitz_doc, profile), self)
+        self._worker.succeeded.connect(self._on_done)
+        self._worker.failed.connect(lambda message: QMessageBox.critical(self, "預檢失敗", message))
+        self._worker.finished.connect(self._progress.hide)
         self._worker.start()
 
     def _on_done(self, report: PreflightReport):
@@ -134,8 +142,8 @@ class PreflightDialog(QDialog):
         if self._doc.fitz_doc is None or self._report is None:
             return
         engine = PreflightEngine()
-        engine.fix_downsample_images(self._doc.fitz_doc)
-        self._doc._mark_modified()
+        with self._doc.edit_transaction("降低圖片解析度"):
+            engine.fix_downsample_images(self._doc.fitz_doc)
         QMessageBox.information(self, "修正完成", "已自動修正圖片解析度問題。\n請重新執行預檢確認。")
 
     def _export(self):

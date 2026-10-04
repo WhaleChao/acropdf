@@ -12,7 +12,9 @@ from PyQt6.QtWidgets import (
 )
 from pathlib import Path
 from PyQt6.QtCore import Qt, QPoint, QSize, QMarginsF, QTimer
-from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QIcon, QPageLayout, QPageSize
+from PyQt6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut, QIcon, QPageLayout, QPageSize
+from ui.theme import theme_manager, COLORS
+from ui.icons import icon
 
 
 def _load_window_icon() -> "QIcon | None":
@@ -36,72 +38,7 @@ from app.constants import ToolMode, LayoutMode
 from ui.widgets.detachable_tabbar import DetachableTabBar
 
 
-class WelcomePanel(QWidget):
-    """沒有文件時的起始畫面，讓第一步更明確。"""
-
-    def __init__(self, parent: "MainWindow"):
-        super().__init__(parent)
-        self._main = parent
-        self.setObjectName("welcomePanel")
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(36, 36, 36, 36)
-        outer.setSpacing(18)
-        outer.addStretch(1)
-
-        title = QLabel("AcroPDF")
-        title.setObjectName("welcomeTitle")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        outer.addWidget(title)
-
-        actions = QHBoxLayout()
-        actions.setSpacing(10)
-        actions.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        open_btn = QPushButton("開啟 PDF")
-        open_btn.setDefault(True)
-        open_btn.clicked.connect(parent.open_file_dialog)
-        new_btn = QPushButton("新增空白 PDF")
-        new_btn.clicked.connect(parent.new_document)
-        actions.addWidget(open_btn)
-        actions.addWidget(new_btn)
-        outer.addLayout(actions)
-
-        self._recent_frame = QFrame()
-        self._recent_frame.setObjectName("welcomeRecent")
-        recent_layout = QVBoxLayout(self._recent_frame)
-        recent_layout.setContentsMargins(16, 14, 16, 14)
-        recent_layout.setSpacing(8)
-        recent_title = QLabel("最近開啟")
-        recent_title.setObjectName("welcomeSectionTitle")
-        recent_layout.addWidget(recent_title)
-        self._recent_grid = QGridLayout()
-        self._recent_grid.setContentsMargins(0, 0, 0, 0)
-        self._recent_grid.setSpacing(6)
-        recent_layout.addLayout(self._recent_grid)
-        outer.addWidget(self._recent_frame, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        hint = QLabel("可直接拖曳 PDF、圖片或 Office 文件到視窗")
-        hint.setObjectName("welcomeHint")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        outer.addWidget(hint)
-        outer.addStretch(2)
-        self.refresh_recent()
-
-    def refresh_recent(self):
-        while self._recent_grid.count():
-            item = self._recent_grid.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
-
-        recent = [p for p in self._main._config.recent_files if os.path.exists(p)][:6]
-        self._recent_frame.setVisible(bool(recent))
-        for i, path in enumerate(recent):
-            btn = QPushButton(os.path.basename(path))
-            btn.setObjectName("recentFileButton")
-            btn.setToolTip(path)
-            btn.clicked.connect(lambda checked=False, p=path: self._main.open_file(p))
-            self._recent_grid.addWidget(btn, i // 2, i % 2)
+from ui.widgets.welcome import WelcomePanel
 
 
 class AcrobatToolsPanel(QScrollArea):
@@ -110,6 +47,8 @@ class AcrobatToolsPanel(QScrollArea):
     def __init__(self, parent: "MainWindow"):
         super().__init__(parent)
         self._main = parent
+        self._groups = []
+        self._buttons = []
         self.setObjectName("toolsCenter")
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -123,6 +62,12 @@ class AcrobatToolsPanel(QScrollArea):
         heading = QLabel("工具")
         heading.setObjectName("toolsCenterTitle")
         layout.addWidget(heading)
+        self._filter = QLineEdit()
+        self._filter.setPlaceholderText("搜尋工具…")
+        self._filter.setAccessibleName("搜尋 PDF 工具")
+        self._filter.setClearButtonEnabled(True)
+        self._filter.textChanged.connect(self._filter_tools)
+        layout.addWidget(self._filter)
 
         self._add_group(layout, "建立與整理", [
             ("開啟 / 建立", parent.open_file_dialog),
@@ -154,7 +99,7 @@ class AcrobatToolsPanel(QScrollArea):
             ("匯出 Excel", lambda: parent._export("xlsx")),
             ("匯出 PowerPoint", lambda: parent._export("pptx")),
             ("匯出圖片", lambda: parent._export("png")),
-            ("儲存為 PDF/A", lambda: parent._export("pdfa")),
+            ("PDF/A 長期保存", lambda: parent._export("pdfa")),
             ("壓縮 PDF", parent._optimize_dialog),
         ])
         self._add_group(layout, "保護與審查", [
@@ -171,6 +116,11 @@ class AcrobatToolsPanel(QScrollArea):
             ("AI 翻譯", parent._ai_translate_dialog),
             ("智慧歸檔", parent._filing_dialog),
         ])
+        self._empty = QLabel("沒有符合的工具。試試「頁面」或「匯出」。")
+        self._empty.setWordWrap(True)
+        self._empty.setProperty("role", "muted")
+        self._empty.hide()
+        layout.addWidget(self._empty)
 
         layout.addStretch(1)
         self.setWidget(body)
@@ -184,12 +134,36 @@ class AcrobatToolsPanel(QScrollArea):
         label = QLabel(title)
         label.setObjectName("toolGroupTitle")
         group_layout.addWidget(label)
+        buttons = []
         for text, slot in actions:
             btn = QPushButton(text)
             btn.setObjectName("toolCenterButton")
             btn.clicked.connect(slot)
+            btn.setAccessibleName(text)
+            btn.setToolTip(text)
+            buttons.append(btn)
+            requires_doc = text not in ("開啟 / 建立", "合併 PDF", "組織頁面", "比較文件", "智慧歸檔")
+            self._buttons.append((btn, requires_doc))
             group_layout.addWidget(btn)
         layout.addWidget(frame)
+        self._groups.append((frame, title, buttons))
+
+    def set_document_available(self, available):
+        for button, requires_doc in self._buttons:
+            button.setEnabled(available or not requires_doc)
+            button.setToolTip(button.text() if button.isEnabled() else "請先開啟文件")
+
+    def _filter_tools(self, query):
+        matches = 0
+        for frame, title, buttons in self._groups:
+            visible = False
+            for button in buttons:
+                matched = query.strip().casefold() in (title + button.text()).casefold()
+                button.setVisible(matched)
+                visible = visible or matched
+                matches += int(matched)
+            frame.setVisible(visible)
+        self._empty.setVisible(matches == 0)
 
 
 class MainWindow(QMainWindow):
@@ -208,6 +182,15 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(_icon)
         self._config = Config()
         self._docs: list[PDFDocument] = []
+        self._doc_connections = {}
+        self._detached_windows = []
+        self._document_actions = []
+        self._icon_targets = []
+        from core.recovery import RecoveryStore
+        self._recovery = RecoveryStore()
+        self._recovery_timer = QTimer(self)
+        self._recovery_timer.setSingleShot(True)
+        self._recovery_timer.timeout.connect(self._capture_recovery)
         self._tool_actions: dict[ToolMode, QAction] = {}
         self._presentation_view = None
         self._rulers_visible = False
@@ -216,8 +199,16 @@ class MainWindow(QMainWindow):
         self._setup_menu()
         self._setup_toolbar()
         self._setup_statusbar()
+        self._theme_manager = theme_manager()
+        self._theme_manager.changed.connect(self._theme_changed)
         # 載入主題
         self._apply_theme(self._config.theme)
+        self._refresh_workspace_state()
+        geometry = self._config.get("window_geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+        self._command_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        self._command_shortcut.activated.connect(self._show_command_palette)
 
     def open_integration_tool(self, tool_id: str) -> bool:
         """只接受固定工具識別碼，供 OpenDesk 直接開啟對應工作流程。"""
@@ -291,13 +282,16 @@ class MainWindow(QMainWindow):
             btn = QPushButton(label)
             btn.setObjectName("sideNavButton")
             btn.setCheckable(True)
+            btn.setAccessibleName(label)
+            self._icon_targets.append((btn, ("folder", "tools", "grid", "bookmark")[idx]))
             btn.clicked.connect(lambda checked=False, i=idx: self._set_side_page(i))
             self._nav_group.addButton(btn, idx)
             nav_layout.addWidget(btn)
             self._side_stack.addWidget(widget)
-            if idx == 0:
+            if idx == 1:
                 btn.setChecked(True)
         nav_layout.addStretch(1)
+        self._side_stack.setCurrentIndex(1)
         left_layout.addWidget(self._side_nav)
         left_layout.addWidget(self._side_stack, 1)
 
@@ -306,7 +300,8 @@ class MainWindow(QMainWindow):
         self._doc_tabs.setTabBar(self._detachable_bar)
         self._doc_tabs.setTabsClosable(True)        # 必須在 setTabBar 之後
         self._doc_tabs.setMovable(True)
-        self._detachable_bar.setExpanding(True)
+        self._detachable_bar.setExpanding(False)
+        self._detachable_bar.tabMoved.connect(self._on_tab_moved)
         self._detachable_bar.tab_detach_requested.connect(self._detach_tab)
         self._doc_tabs.tabCloseRequested.connect(self._close_tab)
         self._doc_tabs.currentChanged.connect(self._on_tab_changed)
@@ -334,6 +329,8 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self._left_panel)
         splitter.addWidget(right_container)
         splitter.setSizes([300, 980])
+        splitter.setChildrenCollapsible(False)
+        self._splitter = splitter
         self.setCentralWidget(splitter)
 
         # 搜尋狀態
@@ -348,6 +345,36 @@ class MainWindow(QMainWindow):
         self._bookmark_panel.add_requested.connect(self._add_bookmark)
         self._bookmark_panel.delete_requested.connect(self._delete_bookmark)
         self._bookmark_panel.rename_requested.connect(self._rename_bookmark)
+
+    def _on_tab_moved(self, from_index, to_index):
+        self._docs.insert(to_index, self._docs.pop(from_index))
+        self._on_tab_changed(self._doc_tabs.currentIndex())
+
+    def _setup_workspace_header(self):
+        header = QToolBar("工作區", self)
+        header.setObjectName("workspaceHeader")
+        header.setMovable(False)
+        brand = QLabel("AcroPDF"); brand.setObjectName("brandName")
+        header.addWidget(brand)
+        spacer = QWidget()
+        from PyQt6.QtWidgets import QSizePolicy
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        header.addWidget(spacer)
+        badge = QLabel("文件處理在本機"); badge.setObjectName("localBadge")
+        badge.setToolTip("PDF 編輯在本機執行；AI 功能會另行說明資料傳送")
+        header.addWidget(badge)
+        command = QPushButton("搜尋指令   ⌘ / Ctrl K"); command.setObjectName("commandButton")
+        command.clicked.connect(self._show_command_palette); header.addWidget(command)
+        self._icon_targets.append((command, "search"))
+        self._theme_combo = QComboBox()
+        self._theme_combo.setAccessibleName("外觀模式")
+        self._theme_combo.addItem("跟隨系統", "system")
+        self._theme_combo.addItem("日間模式", "light")
+        self._theme_combo.addItem("夜間模式", "dark")
+        self._theme_combo.currentIndexChanged.connect(lambda _: self._switch_theme(self._theme_combo.currentData()))
+        header.addWidget(self._theme_combo)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, header)
+        self.addToolBarBreak()
 
     def _setup_menu(self):
         mb = self.menuBar()
@@ -428,17 +455,19 @@ class MainWindow(QMainWindow):
         view_menu.addSeparator()
 
         # 深色 / 淺色模式
-        theme_menu = view_menu.addMenu("主題")
-        self._theme_light_act = QAction("淺色模式", self)
-        self._theme_light_act.setCheckable(True)
-        self._theme_light_act.setChecked(self._config.theme == "light")
-        self._theme_light_act.triggered.connect(lambda: self._switch_theme("light"))
-        theme_menu.addAction(self._theme_light_act)
-        self._theme_dark_act = QAction("深色模式", self)
-        self._theme_dark_act.setCheckable(True)
-        self._theme_dark_act.setChecked(self._config.theme == "dark")
-        self._theme_dark_act.triggered.connect(lambda: self._switch_theme("dark"))
-        theme_menu.addAction(self._theme_dark_act)
+        theme_menu = view_menu.addMenu("外觀")
+        self._theme_actions = {}
+        self._theme_group = QActionGroup(self)
+        self._theme_group.setExclusive(True)
+        for mode, label in (("system", "跟隨系統"), ("light", "日間模式"), ("dark", "夜間模式")):
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.triggered.connect(lambda checked, m=mode: self._switch_theme(m))
+            self._theme_group.addAction(act)
+            self._theme_actions[mode] = act
+            theme_menu.addAction(act)
+        self._theme_light_act = self._theme_actions["light"]
+        self._theme_dark_act = self._theme_actions["dark"]
 
         # ── 頁面 ──────────────────────────────────
         page_menu = mb.addMenu("頁面(&P)")
@@ -481,7 +510,7 @@ class MainWindow(QMainWindow):
         self._add_action(tools_menu, "自訂圖章...", self._custom_stamp_dialog)
         tools_menu.addSeparator()
         self._add_action(tools_menu, "標注摘要...", self._annot_summary_dialog)
-        self._add_action(tools_menu, "無障礙設定...", self._accessibility_dialog)
+        self._add_action(tools_menu, "無障礙標記與驗證...", self._accessibility_dialog)
         tools_menu.addSeparator()
         self._add_action(tools_menu, "AI 文件摘要...", self._ai_summary_dialog)
         self._add_action(tools_menu, "AI 翻譯...", self._ai_translate_dialog)
@@ -506,7 +535,7 @@ class MainWindow(QMainWindow):
         self._add_action(export_menu, "匯出為純文字...", lambda: self._export("txt"))
         self._add_action(export_menu, "匯出為 HTML...", lambda: self._export("html"))
         export_menu.addSeparator()
-        self._add_action(export_menu, "儲存為 PDF/A...", lambda: self._export("pdfa"))
+        self._add_action(export_menu, "PDF/A 長期保存...", lambda: self._export("pdfa"))
         self._add_action(export_menu, "匯出為 PDF/X...", self._export_pdfx_dialog)
 
         # ── 說明 ──────────────────────────────────
@@ -520,6 +549,12 @@ class MainWindow(QMainWindow):
             act.setShortcut(QKeySequence(shortcut))
         act.triggered.connect(slot)
         menu.addAction(act)
+        name = getattr(slot, "__name__", "")
+        if name not in {"open_file_dialog", "new_document", "close", "_compare_dialog", "_batch_dialog",
+                        "_filing_dialog", "_template_dialog", "_export_diagnostics", "_about_dialog", "_merge_pdf"}:
+            self._document_actions.append(act)
+        if name in ("_undo", "_redo"):
+            setattr(self, name + "_action", act)
         return act
 
     def _export_diagnostics(self):
@@ -557,8 +592,11 @@ class MainWindow(QMainWindow):
         )
 
     def _setup_toolbar(self):
+        self._setup_workspace_header()
         tb = self.addToolBar("工具列")
+        self._main_toolbar = tb
         tb.setIconSize(QSize(18, 18))
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         tb.setMovable(False)
         # 不設 inline stylesheet — 全部由 QSS 主題檔控制顏色
 
@@ -566,14 +604,19 @@ class MainWindow(QMainWindow):
         open_act.setToolTip("開啟文件")
         open_act.triggered.connect(self.open_file_dialog)
         tb.addAction(open_act)
+        self._icon_targets.append((open_act, "folder"))
         save_act = QAction("儲存", self)
         save_act.setToolTip("儲存目前文件")
         save_act.triggered.connect(self.save)
         tb.addAction(save_act)
+        self._save_action = save_act
+        self._document_actions.append(save_act)
+        self._icon_targets.append((save_act, "save"))
         self._save_as_action = QAction("另存新檔", self)
         self._save_as_action.setToolTip("另存新檔（Ctrl+Shift+S）")
         self._save_as_action.triggered.connect(self.save_as)
         tb.addAction(self._save_as_action)
+        self._document_actions.append(self._save_as_action)
         self._close_pdf_btn = QPushButton("關閉 PDF")
         self._close_pdf_btn.setObjectName("closePdfButton")
         self._close_pdf_btn.setToolTip("關閉目前 PDF（Ctrl+W）")
@@ -584,6 +627,7 @@ class MainWindow(QMainWindow):
         print_act.setToolTip("列印目前文件")
         print_act.triggered.connect(self._print_document)
         tb.addAction(print_act)
+        self._document_actions.append(print_act)
         tb.addSeparator()
 
         tools_act = QAction("工具", self)
@@ -594,6 +638,7 @@ class MainWindow(QMainWindow):
         props_act.setToolTip("查看文件屬性與安全狀態")
         props_act.triggered.connect(self._document_properties_dialog)
         tb.addAction(props_act)
+        self._document_actions.append(props_act)
         tb.addSeparator()
 
         prev_act = QAction("上一頁", self)
@@ -624,7 +669,7 @@ class MainWindow(QMainWindow):
         # ── 縮放（精簡下拉）──────────────────────────────────
         self._zoom_combo = QComboBox()
         self._zoom_combo.setEditable(True)
-        self._zoom_combo.setFixedWidth(76)
+        self._zoom_combo.setFixedWidth(104)
         self._zoom_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self._zoom_combo.addItems([
             "50%", "75%", "100%", "125%", "150%",
@@ -637,7 +682,9 @@ class MainWindow(QMainWindow):
 
         self.addToolBarBreak()
         mark_tb = self.addToolBar("標記工具列")
+        self._mark_toolbar = mark_tb
         mark_tb.setIconSize(QSize(18, 18))
+        mark_tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         mark_tb.setMovable(False)
 
         def _add(label, mode, tooltip=None):
@@ -649,15 +696,19 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda checked, m=mode: self._set_tool(m))
             mark_tb.addAction(act)
             self._tool_actions[mode] = act
+            glyphs = {ToolMode.HAND: "hand", ToolMode.ZOOM: "zoom", ToolMode.TEXT_EDIT: "edit",
+                      ToolMode.IMAGE_EDIT: "image", ToolMode.HIGHLIGHT: "highlight", ToolMode.FREEHAND: "pen"}
+            if mode in glyphs:
+                self._icon_targets.append((act, glyphs[mode]))
 
         # ── 常用（精簡，像 macOS Preview）──────────────────────
-        _add("✋", ToolMode.HAND, "拖曳")
-        _add("🔍", ToolMode.ZOOM, "放大")
+        _add("拖曳", ToolMode.HAND, "拖曳頁面")
+        _add("放大", ToolMode.ZOOM, "放大")
         mark_tb.addSeparator()
 
         # ── 編輯 ──────────────────────────────────────────────
-        _add("📝", ToolMode.TEXT_EDIT, "編輯文字")
-        _add("🖼", ToolMode.IMAGE_EDIT, "編輯圖片")
+        _add("編輯文字", ToolMode.TEXT_EDIT, "編輯文字")
+        _add("編輯圖片", ToolMode.IMAGE_EDIT, "編輯圖片")
         mark_tb.addSeparator()
 
         # ── 標記工具（像 Preview 的 Markup Toolbar）───────────
@@ -727,18 +778,19 @@ class MainWindow(QMainWindow):
 
         # ── 右側縮放控制區 ─────────────────────────────
         zoom_widget = QWidget()
+        self._zoom_status_widget = zoom_widget
         zoom_layout = QHBoxLayout(zoom_widget)
         zoom_layout.setContentsMargins(0, 0, 0, 0)
         zoom_layout.setSpacing(4)
 
         # 縮小按鈕
-        self._zoom_out_btn = QLabel("−")
+        self._zoom_out_btn = QPushButton("−")
         self._zoom_out_btn.setObjectName("zoomOutBtn")
         self._zoom_out_btn.setFixedSize(26, 26)
-        self._zoom_out_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._zoom_out_btn.setToolTip("縮小")
         self._zoom_out_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._zoom_out_btn.mousePressEvent = lambda e: self._zoom_out()
+        self._zoom_out_btn.clicked.connect(self._zoom_out)
+        self._zoom_out_btn.setAccessibleName("縮小頁面")
         zoom_layout.addWidget(self._zoom_out_btn)
 
         # 縮放滑桿
@@ -746,20 +798,20 @@ class MainWindow(QMainWindow):
         self._zoom_slider.setObjectName("zoomSlider")
         self._zoom_slider.setFixedWidth(120)
         self._zoom_slider.setMinimum(10)    # 10%
-        self._zoom_slider.setMaximum(400)   # 400%
+        self._zoom_slider.setMaximum(800)   # 400%
         self._zoom_slider.setValue(100)
         self._zoom_slider.setToolTip("拖曳調整縮放比例")
         self._zoom_slider.valueChanged.connect(self._on_zoom_slider_changed)
         zoom_layout.addWidget(self._zoom_slider)
 
         # 放大按鈕
-        self._zoom_in_btn = QLabel("+")
+        self._zoom_in_btn = QPushButton("+")
         self._zoom_in_btn.setObjectName("zoomInBtn")
         self._zoom_in_btn.setFixedSize(26, 26)
-        self._zoom_in_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._zoom_in_btn.setToolTip("放大")
         self._zoom_in_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._zoom_in_btn.mousePressEvent = lambda e: self._zoom_in()
+        self._zoom_in_btn.clicked.connect(self._zoom_in)
+        self._zoom_in_btn.setAccessibleName("放大頁面")
         zoom_layout.addWidget(self._zoom_in_btn)
 
         # 百分比標籤
@@ -778,23 +830,82 @@ class MainWindow(QMainWindow):
 
     # ── 主題切換 ─────────────────────────────────────────────────
     def _apply_theme(self, theme: str):
-        qss_path = Path(__file__).parent.parent / "resources" / "styles" / f"{theme}.qss"
-        if qss_path.exists():
-            with open(qss_path, "r", encoding="utf-8") as f:
-                self.setStyleSheet(f.read())
+        self._theme_manager.set_mode(theme)
 
     def _switch_theme(self, theme: str):
-        self._config.theme = theme
         self._apply_theme(theme)
-        self._theme_light_act.setChecked(theme == "light")
-        self._theme_dark_act.setChecked(theme == "dark")
-        # 通知所有 PDFView 更新 viewport 背景色
-        bg_hex = "#e8e8ed" if theme == "light" else "#3a3a3c"
-        for i in range(self._doc_tabs.count()):
-            w = self._doc_tabs.widget(i)
-            view = getattr(w, "_view", None) or (w if isinstance(w, PDFView) else None)
-            if view and hasattr(view, "set_bg_color"):
-                view.set_bg_color(bg_hex)
+
+    def _theme_changed(self, theme):
+        for target, glyph in self._icon_targets:
+            target.setIcon(icon(glyph, COLORS[theme]["accent"]))
+        for mode, action in self._theme_actions.items():
+            action.setChecked(mode == self._theme_manager.mode)
+        self._theme_combo.blockSignals(True)
+        self._theme_combo.setCurrentIndex(self._theme_combo.findData(self._theme_manager.mode))
+        self._theme_combo.blockSignals(False)
+        for view in self.findChildren(PDFView):
+            view.set_bg_color(COLORS[theme]["canvas"])
+
+    def _show_command_palette(self):
+        from ui.widgets.command_palette import CommandPalette
+        available = self._current_doc() is not None
+        commands = [
+            ("開啟文件", "open pdf", self.open_file_dialog, True),
+            ("新增空白 PDF", "new", self.new_document, True),
+            ("儲存文件", "save", self.save, available),
+            ("另存新檔", "save as", self.save_as, available),
+            ("搜尋文件文字", "find search", self._toggle_search, available),
+            ("工具中心", "tools", self._show_tools_center, True),
+            ("整理頁面", "pages", self._show_thumbnails, available),
+            ("OCR 文字辨識", "scan", self._ocr_dialog, available),
+            ("永久塗黑", "redact", self._redaction_dialog, available),
+            ("比較文件", "compare", self._compare_dialog, True),
+            ("匯出 Word", "docx export", lambda: self._export("docx"), available),
+            ("匯出圖片", "png export", lambda: self._export("png"), available),
+            ("壓縮 PDF", "optimize", self._optimize_dialog, available),
+            ("文件屬性", "properties", self._document_properties_dialog, available),
+            ("預檢", "preflight", self._preflight_dialog, available),
+            ("日間模式", "light theme", lambda: self._switch_theme("light"), True),
+            ("夜間模式", "dark theme", lambda: self._switch_theme("dark"), True),
+            ("跟隨系統外觀", "system theme", lambda: self._switch_theme("system"), True),
+        ]
+        CommandPalette(self, commands).exec()
+
+    def _capture_recovery(self):
+        for doc in self._docs:
+            if doc.is_modified:
+                try:
+                    self._recovery.capture(doc)
+                except Exception as exc:
+                    self._status_bar.showMessage(f"恢復備份未完成：{exc}。請手動儲存文件。", 10000)
+
+    def offer_recovery(self):
+        entries = self._recovery.entries()
+        if not entries:
+            return
+        reply = QMessageBox.question(
+            self, "找到未儲存的文件",
+            f"上次工作留下 {len(entries)} 份恢復備份。要恢復工作嗎？\n"
+            "恢復後需另存新檔；原始文件不會被覆寫。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.No:
+            for entry in entries: self._recovery.remove(entry)
+        elif reply == QMessageBox.StandardButton.Yes:
+            for entry in entries:
+                try:
+                    doc = self._recovery.restore(entry, self)
+                    if doc is None:
+                        password, accepted = QInputDialog.getText(self, "加密恢復備份", f"「{entry['name']}」的開啟密碼：", QLineEdit.EchoMode.Password)
+                        if not accepted: continue
+                        doc = self._recovery.restore(entry, self, password)
+                    if doc is not None:
+                        self._add_doc_tab(doc)
+                    else:
+                        QMessageBox.warning(self, "無法恢復", "密碼不正確，備份仍保留。")
+                except Exception as exc:
+                    QMessageBox.warning(self, "無法恢復", str(exc))
 
     # ── 頁面檢視模式 ────────────────────────────────────────────
     def _set_layout_mode(self, mode: LayoutMode):
@@ -819,43 +930,42 @@ class MainWindow(QMainWindow):
 
     # ── 分割檢視 ────────────────────────────────────────────────
     def _toggle_split_view(self):
+        old = self._doc_tabs.currentWidget()
         view = self._current_view()
-        if not view:
-            return
         doc = self._current_doc()
-        if not doc:
+        if not view or not doc:
+            self._split_action.setChecked(False)
             return
+        page, zoom, mode = view.current_page(), view.zoom(), view._layout_mode
+        idx = self._doc_tabs.currentIndex()
         if self._split_action.isChecked():
-            # 建立分割檢視
             from ui.viewer.split_view import SplitViewContainer
-            idx = self._doc_tabs.currentIndex()
-            container = SplitViewContainer(self)
-            container.load_document(doc)
-            container.primary_view.page_changed.connect(self._on_page_changed)
-            container.primary_view.zoom_changed.connect(self._on_zoom_changed)
-            container.primary_view.page_context_requested.connect(self._show_page_context_menu)
-            self._doc_tabs.blockSignals(True)
-            try:
-                self._doc_tabs.removeTab(idx)
-                self._doc_tabs.insertTab(idx, container, doc.display_name)
-                self._doc_tabs.setCurrentIndex(idx)
-            finally:
-                self._doc_tabs.blockSignals(False)
+            replacement = SplitViewContainer(self)
+            replacement.load_document(doc)
+            replacement.set_split_enabled(True)
+            primary = replacement.primary_view
+            views = [primary, replacement.secondary_view]
         else:
-            # 還原為單一檢視
-            idx = self._doc_tabs.currentIndex()
-            new_view = PDFView(self)
-            new_view.load_document(doc)
-            new_view.page_changed.connect(self._on_page_changed)
-            new_view.zoom_changed.connect(self._on_zoom_changed)
-            new_view.page_context_requested.connect(self._show_page_context_menu)
-            self._doc_tabs.blockSignals(True)
-            try:
-                self._doc_tabs.removeTab(idx)
-                self._doc_tabs.insertTab(idx, new_view, doc.display_name)
-                self._doc_tabs.setCurrentIndex(idx)
-            finally:
-                self._doc_tabs.blockSignals(False)
+            replacement = PDFView(self)
+            replacement.load_document(doc)
+            primary = replacement
+            views = [primary]
+        for current in views:
+            current.set_layout_mode(mode)
+            current.set_bg_color(COLORS[theme_manager().resolved]["canvas"])
+            current.set_zoom(zoom)
+            current.go_to_page(page)
+        self._connect_view(primary)
+        self._doc_tabs.blockSignals(True)
+        try:
+            self._doc_tabs.removeTab(idx)
+            self._doc_tabs.insertTab(idx, replacement, doc.display_name)
+            self._doc_tabs.setCurrentIndex(idx)
+        finally:
+            self._doc_tabs.blockSignals(False)
+        self._dispose_tab_widget(old)
+        self._set_tool(ToolMode.HAND)
+        self._on_tab_changed(idx)
 
     # ── 尺規 & 格線 ─────────────────────────────────────────────
     def _toggle_rulers(self):
@@ -891,21 +1001,17 @@ class MainWindow(QMainWindow):
                 return
             if reply == QMessageBox.StandardButton.SaveAll:
                 for doc in unsaved:
-                    if doc.path:
-                        doc.save()
-                    else:
-                        from PyQt6.QtWidgets import QFileDialog
-                        path, _ = QFileDialog.getSaveFileName(
-                            self, f"儲存「{doc.display_name}」", "",
-                            "PDF 檔案 (*.pdf)"
-                        )
-                        if path:
-                            doc.save(path)
-                        else:
-                            event.ignore()
-                            return
+                    if not self._save_document_for_close(doc):
+                        event.ignore()
+                        return
+        self._config.set("window_geometry", self.saveGeometry())
+        self._recovery_timer.stop()
+        for index in range(self._doc_tabs.count()):
+            self._dispose_tab_widget(self._doc_tabs.widget(index))
         for doc in self._docs:
             try:
+                self._disconnect_document(doc)
+                self._recovery.remove(doc)
                 doc.close()
             except Exception:
                 pass
@@ -971,14 +1077,14 @@ class MainWindow(QMainWindow):
     def open_file(self, path: str):
         abs_path = os.path.abspath(path)
         for i, d in enumerate(self._docs):
-            if d.path and os.path.abspath(d.path) == abs_path:
+            if d.source_path and os.path.abspath(d.source_path) == abs_path:
                 self._doc_tabs.setCurrentIndex(i)
                 return
         doc = self._open_document_with_password(path)
         if doc is None:
             return
         self._add_doc_tab(doc)
-        self._config.add_recent_file(path)
+        self._config.add_recent_file(abs_path)
         self._update_recent_menu()
 
     def _open_document_with_password(self, path: str) -> PDFDocument | None:
@@ -1048,10 +1154,10 @@ class MainWindow(QMainWindow):
 
     def _add_doc_tab(self, doc: PDFDocument):
         view = PDFView(self)
+        view.set_layout_mode(self._config.layout_mode)
+        view.set_bg_color(COLORS[theme_manager().resolved]["canvas"])
         view.load_document(doc)
-        view.page_changed.connect(self._on_page_changed)
-        view.zoom_changed.connect(self._on_zoom_changed)
-        view.page_context_requested.connect(self._show_page_context_menu)
+        self._connect_view(view)
 
         name = doc.display_name
         self._docs.append(doc)
@@ -1062,17 +1168,79 @@ class MainWindow(QMainWindow):
         finally:
             self._doc_tabs.blockSignals(False)
         self._workspace_stack.setCurrentWidget(self._doc_tabs)
+        view.set_bg_color(COLORS[theme_manager().resolved]["canvas"])
 
         self._thumbnail_panel.load_document(doc)
         self._bookmark_panel.load_document(doc)
         self._update_title()
         self._on_page_count_changed(doc, doc.page_count)
         self._refresh_workspace_state()
-        QTimer.singleShot(0, view.fit_width)
-        QTimer.singleShot(0, lambda: self._set_tool(ToolMode.HAND))
+        QTimer.singleShot(0, lambda v=view: v.fit_width() if v._doc is not None else None)
+        self._set_tool(ToolMode.HAND)
+        view.set_rulers_visible(self._config.show_rulers)
+        view.set_grid_visible(self._config.show_grid)
 
-        doc.page_count_changed.connect(lambda count: self._on_page_count_changed(doc, count))
-        doc.document_modified.connect(lambda: self._on_doc_modified(doc))
+        count_slot = lambda count: self._on_page_count_changed(doc, count)
+        modified_slot = lambda: self._on_doc_modified(doc)
+        saved_slot = lambda: self._on_doc_saved(doc)
+        self._doc_connections[doc] = (count_slot, modified_slot, saved_slot)
+        doc.page_count_changed.connect(count_slot)
+        doc.document_modified.connect(modified_slot)
+        doc.document_saved.connect(saved_slot)
+        if doc.is_modified:
+            self._recovery_timer.start(1500)
+
+    def _connect_view(self, view):
+        view.page_changed.connect(lambda page: self._on_page_changed(page) if self._current_view() is view else None)
+        view.zoom_changed.connect(lambda zoom: self._on_zoom_changed(zoom) if self._current_view() is view else None)
+        view.page_context_requested.connect(self._show_page_context_menu)
+
+    def _disconnect_document(self, doc):
+        slots = self._doc_connections.pop(doc, None)
+        if slots:
+            for signal, slot in zip((doc.page_count_changed, doc.document_modified, doc.document_saved), slots):
+                try:
+                    signal.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
+
+    def _dispose_tab_widget(self, widget):
+        if not widget:
+            return
+        views = [widget] if isinstance(widget, PDFView) else widget.findChildren(PDFView)
+        for view in views:
+            view.unload_document()
+        widget.deleteLater()
+
+    def _save_document_for_close(self, doc):
+        path = doc.path
+        if not path:
+            from ui.dialogs.export.export_dialog import default_export_path, ensure_export_suffix
+            path, _ = QFileDialog.getSaveFileName(self, f"儲存「{doc.display_name}」",
+                                                default_export_path(doc, "pdf"), "PDF 檔案 (*.pdf)")
+            if not path:
+                return False
+            path = ensure_export_suffix(path, "pdf")
+        if not doc.save(path):
+            QMessageBox.warning(self, "儲存失敗，文件仍保留", doc.last_error or "請確認儲存位置與權限。")
+            return False
+        return True
+
+    def _on_doc_saved(self, doc):
+        self._recovery.remove(doc)
+        if doc.path:
+            self._config.add_recent_file(doc.path)
+            self._update_recent_menu()
+        self._update_tab_title(doc)
+        if self._current_doc() is doc:
+            self._update_title()
+            self._status_bar.showMessage("已安全儲存", 4000)
+
+    def _update_tab_title(self, doc):
+        if doc in self._docs:
+            index = self._docs.index(doc)
+            self._doc_tabs.setTabText(index, doc.display_name + (" *" if doc.is_modified else ""))
+            self._doc_tabs.setTabToolTip(index, doc.source_path or "尚未儲存")
 
     def _close_tab(self, index: int):
         if index < 0 or index >= len(self._docs):
@@ -1089,23 +1257,12 @@ class MainWindow(QMainWindow):
             if reply == QMessageBox.StandardButton.Cancel:
                 return
             if reply == QMessageBox.StandardButton.Save:
-                if doc.path:
-                    doc.save()
-                else:
-                    path, _ = QFileDialog.getSaveFileName(
-                        self, f"儲存「{doc.display_name}」", "",
-                        "PDF 檔案 (*.pdf)"
-                    )
-                    if path:
-                        doc.save(path)
-                    else:
-                        return
-        try:
-            doc.page_count_changed.disconnect()
-            doc.document_modified.disconnect()
-        except (TypeError, RuntimeError):
-            pass
+                if not self._save_document_for_close(doc):
+                    return
+        self._disconnect_document(doc)
+        self._dispose_tab_widget(self._doc_tabs.widget(index))
         self._thumbnail_panel.invalidate_cache(doc)
+        self._recovery.remove(doc)
         self._docs.pop(index)
         self._doc_tabs.blockSignals(True)
         try:
@@ -1125,12 +1282,8 @@ class MainWindow(QMainWindow):
             return
         doc = self._docs[index]
 
-        # 先從目前視窗移除（不關閉 doc）
-        try:
-            doc.page_count_changed.disconnect()
-            doc.document_modified.disconnect()
-        except (TypeError, RuntimeError):
-            pass
+        self._disconnect_document(doc)
+        self._dispose_tab_widget(self._doc_tabs.widget(index))
         self._thumbnail_panel.invalidate_cache(doc)
         self._docs.pop(index)
         self._doc_tabs.blockSignals(True)
@@ -1144,6 +1297,8 @@ class MainWindow(QMainWindow):
         # 建立新視窗，把 doc 加進去
         from ui.main_window import MainWindow
         new_win = MainWindow()
+        self._detached_windows.append(new_win)
+        doc.setParent(new_win)
         new_win._add_doc_tab(doc)
         new_win.show()
         new_win.raise_()
@@ -1156,6 +1311,7 @@ class MainWindow(QMainWindow):
         self._search_results = []
         self._search_index = -1
         self._search_text = ""
+        self._search_bar.clear_state()
         if self._search_bar.isVisible():
             self._search_bar.set_result_count(0, 0)
         if 0 <= index < len(self._docs):
@@ -1163,12 +1319,22 @@ class MainWindow(QMainWindow):
             self._thumbnail_panel.load_document(doc)
             self._bookmark_panel.load_document(doc)
             self._update_title()
+            view = self._current_view()
+            if view:
+                self._on_page_changed(view.current_page())
+                self._on_zoom_changed(view.zoom())
+                for mode, action in self._tool_actions.items():
+                    action.setChecked(mode == getattr(view, "_tool_mode", ToolMode.HAND))
+                for mode, action in self._view_mode_actions.items():
+                    action.setChecked(mode == view._layout_mode)
+            self._split_action.setChecked(hasattr(self._doc_tabs.currentWidget(), "primary_view"))
         else:
             self._thumbnail_panel.clear()
             self._thumbnail_panel._current_doc = None
             self._bookmark_panel.clear()
             self._page_label.setText("第 - 頁，共 - 頁")
-            self._zoom_label.setText("-")
+            self._zoom_label.setText("—")
+            self._zoom_combo.setCurrentText("—")
             self._page_total_label.setText("/ -")
             self._syncing_page_spin = True
             self._page_spin.setMaximum(1)
@@ -1179,6 +1345,22 @@ class MainWindow(QMainWindow):
         self._refresh_workspace_state()
 
     def _refresh_workspace_state(self):
+        available = bool(self._docs)
+        self._tools_panel.set_document_available(available)
+        for action in self._document_actions:
+            action.setEnabled(available)
+        doc = self._current_doc()
+        self._undo_action.setEnabled(bool(doc and doc.can_undo()))
+        self._redo_action.setEnabled(bool(doc and doc.can_redo()))
+        if hasattr(self, "_mark_toolbar"):
+            self._mark_toolbar.setEnabled(available)
+            self._mark_toolbar.setVisible(available)
+            self._main_toolbar.setVisible(available)
+        if hasattr(self, "_zoom_status_widget"):
+            self._zoom_status_widget.setVisible(available)
+        for name in ("_page_spin", "_zoom_combo", "_zoom_slider", "_zoom_in_btn", "_zoom_out_btn"):
+            if hasattr(self, name):
+                getattr(self, name).setEnabled(available)
         if hasattr(self, "_close_pdf_btn"):
             self._close_pdf_btn.setEnabled(bool(self._docs))
         if self._docs:
@@ -1186,6 +1368,8 @@ class MainWindow(QMainWindow):
         else:
             self._welcome_panel.refresh_recent()
             self._workspace_stack.setCurrentWidget(self._welcome_panel)
+            self._welcome_panel._open.setFocus()
+            self._page_label.setText("準備就緒 · 本機 PDF 工作區")
 
     def _set_side_page(self, index: int):
         if 0 <= index < self._side_stack.count():
@@ -1426,23 +1610,10 @@ class MainWindow(QMainWindow):
                 self, "選擇取代來源 PDF", "", "PDF 檔案 (*.pdf)"
             )
             if path:
-                import fitz
                 try:
-                    src = fitz.open(path)
-                except Exception as e:
-                    QMessageBox.warning(self, "錯誤", f"無法開啟來源檔案：{e}")
-                    return
-                fd = doc.fitz_doc
-                if fd is not None:
-                    doc.begin_op("取代頁面")
-                    try:
-                        for i, dest_idx in enumerate(sorted(indices)):
-                            if i < src.page_count and 0 <= dest_idx < fd.page_count:
-                                fd[dest_idx].show_pdf_page(fd[dest_idx].rect, src, i)
-                    finally:
-                        doc.end_op()
-                src.close()
-                doc._mark_modified()
+                    doc.pages.replace_pages(indices, path)
+                except Exception as exc:
+                    QMessageBox.warning(self, "取代失敗", str(exc))
 
         elif action_id == "watermark":
             self._watermark_dialog()
@@ -1798,12 +1969,17 @@ class MainWindow(QMainWindow):
             self._doc_state_label.setText("未開啟文件")
             return
         bits = []
-        bits.append("受保護" if doc.fitz_doc.needs_pass else "未加密")
+        bits.append("受保護" if doc.is_encrypted else "未加密")
         if doc.is_modified:
             bits.append("已修改")
         self._doc_state_label.setText(" · ".join(bits))
 
     def _on_doc_modified(self, doc: PDFDocument):
+        if getattr(doc, "_sensitive_content_removed", False):
+            self._recovery.remove(doc)
+            doc._sensitive_content_removed = False
+        self._recovery_timer.start(1500)
+        self._update_tab_title(doc)
         if self._current_doc() is not doc:
             return
         # 只更新目前可見頁的縮圖（最常見情境：加標注、改文字）
@@ -1812,6 +1988,8 @@ class MainWindow(QMainWindow):
             page = view.current_page()
             self._thumbnail_panel.update_page_thumbnail(page)
         self._update_title()
+        self._undo_action.setEnabled(doc.can_undo())
+        self._redo_action.setEnabled(doc.can_redo())
 
         # debounce 完整縮圖重建（若頁數改變則透過 page_count_changed 處理）
         if not hasattr(self, "_thumb_refresh_timer"):
@@ -1892,8 +2070,18 @@ class MainWindow(QMainWindow):
             return
         for action_mode, action in self._tool_actions.items():
             action.setChecked(action_mode == mode)
+        view._tool_mode = mode
         tool = ToolFactory.create(mode, view, doc)
-        view.set_tool(tool)
+        widget = self._doc_tabs.currentWidget()
+        widget.set_tool(tool)
+        descriptions = {
+            ToolMode.HAND: "拖曳：按住滑鼠移動頁面",
+            ToolMode.TEXT_EDIT: "編輯文字：點選文字區塊",
+            ToolMode.IMAGE_EDIT: "編輯圖片：點選圖片或插入新圖片",
+            ToolMode.REDACT: "塗黑：拖曳標記區域，再套用永久塗黑",
+            ToolMode.HIGHLIGHT: "螢光筆：拖曳要標記的區域",
+        }
+        self._status_bar.showMessage(descriptions.get(mode, "拖曳或點選頁面以使用目前工具"), 5000)
         if mode == ToolMode.HAND:
             view.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
         elif mode == ToolMode.ZOOM:
@@ -1932,6 +2120,10 @@ class MainWindow(QMainWindow):
 
         self._search_text = text
         self._search_results = []
+        if not text:
+            self._search_index = -1
+            self._search_bar.set_result_count(0, 0)
+            return
         fitz_doc = doc.fitz_doc
 
         for page_num in range(fitz_doc.page_count):
@@ -2008,16 +2200,15 @@ class MainWindow(QMainWindow):
                     page_num = view.current_page()
                     page = doc.fitz_doc[page_num]
                     # 在頁面中央插入圖章圖片
-                    cx, cy = page.rect.width / 2, page.rect.height / 2
+                    bounds = page.rect * page.derotation_matrix
+                    cx, cy = (bounds.x0+bounds.x1)/2, (bounds.y0+bounds.y1)/2
                     import fitz
                     stamp_rect = fitz.Rect(cx - 60, cy - 40, cx + 60, cy + 40)
-                    doc.begin_op("自訂圖章")
                     try:
-                        page.insert_image(stamp_rect, filename=stamp_path)
-                    except Exception as e:
-                        QMessageBox.warning(self, "錯誤", f"無法插入圖章：{e}")
-                    doc.end_op()
-                    doc._mark_modified()
+                        fitz.Pixmap(stamp_path)
+                        with doc.edit_transaction("自訂圖章"):
+                            page.insert_image(stamp_rect,filename=stamp_path)
+                    except Exception as exc: QMessageBox.warning(self,"無法插入圖章",str(exc))
 
     def _annot_summary_dialog(self):
         doc = self._current_doc()
@@ -2092,7 +2283,7 @@ class MainWindow(QMainWindow):
             return
         reply = QMessageBox.question(
             self, "套用永久塗黑",
-            "確定要永久塗黑所有標記區域？此操作無法復原。",
+            "將移除標記區域中的文字、影像與圖形，並清除復原紀錄。\n請另存分享副本，確認內容後再對外提供。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:

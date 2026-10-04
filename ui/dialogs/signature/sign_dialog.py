@@ -68,6 +68,9 @@ class SignDialog(QDialog):
         if not self._doc.path:
             QMessageBox.warning(self, "錯誤", "請先將文件儲存成 PDF 後再簽章")
             return
+        if self._doc.is_modified:
+            QMessageBox.warning(self, "請先儲存修改", "簽章會使用磁碟上的 PDF。請先儲存目前的修改後再簽章。")
+            return
         try:
             out_path, _ = QFileDialog.getSaveFileName(
                 self, "儲存已簽章 PDF", "", "PDF (*.pdf)"
@@ -83,7 +86,7 @@ class SignDialog(QDialog):
                 location=self._location.text() or "",
             )
             if not ok:
-                raise RuntimeError("簽章失敗，請確認憑證與 pyHanko 設定")
+                raise RuntimeError(self._doc.signatures.last_error or "簽章失敗，請確認憑證與 pyHanko 設定")
             QMessageBox.information(self, "完成", "簽章成功")
             self.accept()
         except Exception as e:

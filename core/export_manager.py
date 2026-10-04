@@ -18,33 +18,36 @@ class ExportManager:
         return doc
 
     def export(self, output_path: str, fmt: str, dpi: int = 150):
-        self._safe_fitz()  # 提早檢查
+        self._safe_fitz()
         normalized = fmt.lower().replace("/a", "a")
-        if normalized == "docx":
-            output_path = self._validated_output_path(output_path)
-            return self.export_docx(output_path)
-        if normalized == "xlsx":
-            output_path = self._validated_output_path(output_path)
-            return self.export_xlsx(output_path)
-        if normalized == "pptx":
-            output_path = self._validated_output_path(output_path)
-            return self.export_pptx(output_path)
-        if normalized in {"png", "jpg", "jpeg", "tiff"}:
-            output_dir = output_path
-            if os.path.splitext(output_path)[1]:
-                output_dir = os.path.dirname(output_path) or "."
-            output_dir = self._validated_output_dir(output_dir)
-            return self.export_images(output_dir, fmt=normalized.replace("jpeg", "jpg"), dpi=dpi)
-        if normalized == "txt":
-            output_path = self._validated_output_path(output_path)
-            return self.export_txt(output_path)
-        if normalized == "html":
-            output_path = self._validated_output_path(output_path)
-            return self.export_html(output_path)
-        if normalized in {"pdfa", "pdf"}:
-            output_path = self._validated_output_path(output_path)
+        if normalized == "pdfa":
             return self.export_pdfa(output_path)
-        raise ValueError(f"不支援的匯出格式：{fmt}")
+        if normalized in {"png", "jpg", "jpeg", "tiff"}:
+            suffix = os.path.splitext(output_path)[1]
+            output_dir = os.path.dirname(output_path) or "." if suffix else output_path
+            output_dir = self._validated_output_dir(output_dir)
+            base = os.path.splitext(os.path.basename(output_path))[0] if suffix else None
+            return self.export_images(output_dir, fmt=normalized.replace("jpeg", "jpg"), dpi=dpi, base=base)
+        exporters = {"docx": self.export_docx, "xlsx": self.export_xlsx, "pptx": self.export_pptx,
+                     "txt": self.export_txt, "html": self.export_html, "pdf": self.export_pdf}
+        if normalized not in exporters:
+            raise ValueError(f"不支援的匯出格式：{fmt}")
+        output_path = self._validated_output_path(output_path)
+        source = self._doc.source_path
+        if source and os.path.realpath(source) == os.path.realpath(output_path):
+            raise ValueError("匯出請選擇新檔名，避免覆寫目前開啟的來源檔。")
+        fd, temporary = tempfile.mkstemp(prefix="acropdf_export_", suffix="." + normalized,
+                                         dir=os.path.dirname(os.path.abspath(output_path)))
+        os.close(fd)
+        try:
+            exporters[normalized](temporary)
+            with open(temporary, "rb") as handle:
+                os.fsync(handle.fileno())
+            os.replace(temporary, output_path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        return output_path
 
     def _validated_output_path(self, output_path: str) -> str:
         output_path = os.path.expanduser(output_path or "")
@@ -102,18 +105,24 @@ class ExportManager:
             page = self._fitz[i]
             ws = wb.create_sheet(f"頁面{i+1}")
             # PyMuPDF 1.23+ 自動偵測表格
+            found = False
             if hasattr(page, "find_tables"):
                 tabs = page.find_tables()
                 row_offset = 1
                 for tab in tabs:
+                    found = True
                     for r, row in enumerate(tab.extract()):
                         for c, cell in enumerate(row):
-                            ws.cell(row=row_offset + r, column=c + 1, value=cell or "")
+                            result = ws.cell(row=row_offset + r, column=c + 1, value=cell or "")
+                            # PDF contents are data, never spreadsheet formulas.
+                            if isinstance(cell, str):
+                                result.data_type = "s"
                     row_offset += len(tab.extract()) + 2
-            else:
+            if not found:
                 text = page.get_text()
                 for r, line in enumerate(text.splitlines()):
-                    ws.cell(row=r + 1, column=1, value=line)
+                    cell = ws.cell(row=r + 1, column=1, value=line)
+                    cell.data_type = "s"
         if "Sheet" in wb.sheetnames:
             del wb["Sheet"]
         wb.save(output_path)
@@ -123,43 +132,61 @@ class ExportManager:
         from pptx import Presentation
         doc = self._safe_fitz()
         prs = Presentation()
+        if doc.page_count:
+            first = doc[0].rect
+            prs.slide_width = int(first.width * 12700)
+            prs.slide_height = int(first.height * 12700)
         for i in range(doc.page_count):
             page = doc[i]
             slide_layout = prs.slide_layouts[6]  # Blank
             slide = prs.slides.add_slide(slide_layout)
             mat = fitz.Matrix(2, 2)
-            try:
-                pix = page.get_pixmap(matrix=mat, alpha=False)
-            except Exception:
-                continue  # 跳過無法渲染的頁面
+            pix = page.get_pixmap(matrix=mat, alpha=False)
             with tempfile.NamedTemporaryFile(prefix="acropdf_slide_", suffix=".png", delete=False) as tmp:
                 img_path = tmp.name
             try:
                 pix.save(img_path)
-                slide.shapes.add_picture(
-                    img_path, left=0, top=0,
-                    width=prs.slide_width, height=prs.slide_height,
-                )
+                ratio = min(prs.slide_width / pix.width, prs.slide_height / pix.height)
+                width, height = int(pix.width * ratio), int(pix.height * ratio)
+                slide.shapes.add_picture(img_path, left=(prs.slide_width - width) // 2,
+                                         top=(prs.slide_height - height) // 2, width=width, height=height)
             finally:
                 if os.path.exists(img_path):
                     os.remove(img_path)
         prs.save(output_path)
 
     # ── 圖片（每頁）─────────────────────────────────────────────
-    def export_images(self, output_dir: str, fmt: str = "png", dpi: int = 150):
+    def export_images(self, output_dir: str, fmt: str = "png", dpi: int = 150, base: str | None = None):
         doc = self._safe_fitz()
-        base = os.path.splitext(os.path.basename(self._doc.path or "page"))[0]
-        paths = []
-        zoom = max(dpi, 1) / 72.0
-        for i in range(doc.page_count):
-            try:
+        if not 72 <= dpi <= 600:
+            raise ValueError("圖片解析度須介於 72 與 600 DPI。")
+        base = base or os.path.splitext(os.path.basename(self._doc.path or "page"))[0]
+        paths = [os.path.join(output_dir, f"{base}_p{i+1:03d}.{fmt}") for i in range(doc.page_count)]
+        for path in paths:
+            if os.path.exists(path):
+                raise FileExistsError(f"圖片已存在，請使用新檔名或資料夾：{path}")
+        published = []
+        with tempfile.TemporaryDirectory(prefix="acropdf_images_", dir=output_dir) as stage:
+            staged = []
+            for i, path in enumerate(paths):
                 page = doc[i]
-                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
-                out = os.path.join(output_dir, f"{base}_p{i+1:03d}.{fmt}")
-                pix.save(out)
-                paths.append(out)
+                pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72), alpha=False)
+                temporary = os.path.join(stage, os.path.basename(path))
+                if fmt == "tiff":
+                    from PIL import Image
+                    Image.frombytes("RGB", (pix.width, pix.height), pix.samples).save(temporary, format="TIFF")
+                else:
+                    pix.save(temporary)
+                staged.append(temporary)
+            try:
+                for temporary, path in zip(staged, paths):
+                    # link refuses to overwrite a concurrently-created destination.
+                    os.link(temporary, path)
+                    published.append(path)
             except Exception:
-                continue
+                for path in published:
+                    os.unlink(path)
+                raise
         return paths
 
     # ── 純文字 ───────────────────────────────────────────────────
@@ -182,16 +209,10 @@ class ExportManager:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(html_parts))
 
-    # ── PDF/A ────────────────────────────────────────────────────
+    def export_pdf(self, output_path: str):
+        self._safe_fitz().save(output_path, garbage=4, deflate=True)
+
     def export_pdfa(self, output_path: str):
-        doc = self._safe_fitz()
-        try:
-            doc.save(
-                output_path,
-                pdfa=True,
-                garbage=4,
-                deflate=True,
-                clean=True,
-            )
-        except TypeError:
-            doc.save(output_path, garbage=4, deflate=True, clean=True)
+        from core.pdf_standards import PDFStandards
+        self.last_standard_report = PDFStandards(self._doc).export_pdfa(output_path)
+        return output_path

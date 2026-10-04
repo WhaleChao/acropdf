@@ -5,6 +5,8 @@ from pathlib import Path
 import fitz
 import pytest
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QSettings
+from app.config import Config
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -19,6 +21,15 @@ def qapp():
     if app is None:
         app = QApplication([])
     return app
+
+
+@pytest.fixture(autouse=True)
+def isolated_settings(tmp_path, monkeypatch):
+    """Tests must never overwrite the user's theme, folders or recent files."""
+    config = object.__new__(Config)
+    config._settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(Config, "_instance", config)
+    monkeypatch.setenv("ACROPDF_RECOVERY_DIR", str(tmp_path / "recovery"))
 
 
 @pytest.fixture()

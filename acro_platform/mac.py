@@ -20,12 +20,12 @@ class MacVisionOCR:
 
     def ocr_page(self, page: fitz.Page, lang: str, dpi: int) -> None:
         """用 macOS Vision 辨識頁面文字，寫入 page 的 text layer"""
-        import io
-        from PIL import Image
+        import math
         from Foundation import NSData
 
         # 1. 渲染頁面為圖片
-        mat = fitz.Matrix(dpi / 72.0, dpi / 72.0)
+        zoom = min(dpi / 72.0, math.sqrt(24_000_000 / page.rect.get_area()), 16384 / max(page.rect.width,page.rect.height))
+        mat = fitz.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         png_bytes = pix.tobytes("png")
 
@@ -52,7 +52,7 @@ class MacVisionOCR:
         # 3. 執行辨識
         success = handler.performRequests_error_([request], None)
         if not success[0]:
-            return
+            raise RuntimeError(f'Apple Vision OCR 失敗：{success[1]}')
 
         # 4. 提取結果並寫入 page 的透明文字層
         results = request.results()
@@ -68,16 +68,8 @@ class MacVisionOCR:
             y0 = (1.0 - bbox.origin.y - bbox.size.height) * page_rect.height
             x1 = (bbox.origin.x + bbox.size.width) * page_rect.width
             y1 = (1.0 - bbox.origin.y) * page_rect.height
-            # 插入透明文字
-            fontsize = max(6, min((y1 - y0) * 0.8, 14))
-            try:
-                page.insert_text(
-                    fitz.Point(x0, y1 - 2),
-                    text, fontsize=fontsize,
-                    color=(0, 0, 0), render_mode=3,  # 3 = invisible
-                )
-            except Exception:
-                pass
+            from acro_platform.common import insert_ocr_line
+            insert_ocr_line(page, text, fitz.Rect(x0, y0, x1, y1))
 
     def ocr_image_path(self, image_path: str, lang: str = "chi_tra+eng") -> str:
         """
@@ -107,7 +99,7 @@ class MacVisionOCR:
 
             success = handler.performRequests_error_([request], None)
             if not success[0]:
-                return ""
+                raise RuntimeError(f"Apple Vision OCR 失敗：{success[1]}")
 
             results = request.results()
             if not results:
@@ -119,8 +111,8 @@ class MacVisionOCR:
                 if cands:
                     lines.append(cands[0].string())
             return "\n".join(lines)
-        except Exception:
-            return ""
+        except Exception as exc:
+            raise RuntimeError(f"Apple Vision OCR 失敗：{exc}") from exc
 
     def supported_languages(self) -> list[str]:
         try:

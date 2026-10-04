@@ -3,7 +3,7 @@ import fitz
 from PyQt6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout,
                               QHBoxLayout, QGridLayout, QSizePolicy, QFrame)
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPoint, QRect, QThreadPool
-from PyQt6.QtGui import QWheelEvent, QPalette, QColor
+from PyQt6.QtGui import QWheelEvent, QPalette, QColor, QImage, QPixmap
 
 from app.constants import LayoutMode, DEFAULT_ZOOM, ZOOM_LEVELS
 from core.document import PDFDocument
@@ -29,7 +29,7 @@ class PDFView(QScrollArea):
         self._cache = PixmapCache()
         self._active_tool = None
         self._pending_signals: list = []  # 防止 RenderSignals 被 GC
-        self._rendering_keys: set[tuple[int, float]] = set()
+        self._rendering_keys: set[tuple[int, float, int]] = set()
         self._render_gen = 0              # 渲染世代：丟棄過時結果
         QThreadPool.globalInstance().setMaxThreadCount(3)
 
@@ -46,14 +46,17 @@ class PDFView(QScrollArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
 
         # 明確設定 viewport 背景色，防止繼承到系統暗色背景顯示黑影
-        _bg = QColor("#e8e8ed")
+        from ui.theme import COLORS, theme_manager
+        _bg = QColor(COLORS[theme_manager().resolved]["canvas"])
         vp = self.viewport()
+        vp.setObjectName("pdfViewport")
         vp.setAutoFillBackground(True)
         _pal = vp.palette()
         _pal.setColor(QPalette.ColorRole.Window, _bg)
         vp.setPalette(_pal)
 
         self._container = QWidget()
+        self._container.setObjectName("pdfCanvas")
         self._container.setAutoFillBackground(True)
         _pal2 = self._container.palette()
         _pal2.setColor(QPalette.ColorRole.Window, _bg)
@@ -89,15 +92,15 @@ class PDFView(QScrollArea):
     def _rebuild_pages(self):
         # 遞增世代，使進行中的背景渲染結果自動失效
         self._render_gen += 1
-        self._pending_signals.clear()
         self._rendering_keys.clear()
 
-        # 清除舊 widgets
-        for w in self._page_widgets:
-            w.deleteLater()
+        # Remove layout items immediately. Deferred widgets must not affect new geometry.
+        while self._container_layout.count():
+            item = self._container_layout.takeAt(0)
+            if item.widget():
+                item.widget().hide()
+                item.widget().deleteLater()
         self._page_widgets.clear()
-        for w in self._row_containers:
-            w.deleteLater()
         self._row_containers.clear()
 
         if not self._doc or not self._doc.fitz_doc:
@@ -178,6 +181,7 @@ class PDFView(QScrollArea):
         if self._active_tool:
             pw.set_tool(self._active_tool)
         pw.context_requested.connect(self.page_context_requested)
+        pw.render_retry.connect(self._render_visible_pages)
         page = self._doc.fitz_doc[page_num]
         pw.setFixedSize(
             int(page.rect.width * self._zoom),
@@ -201,8 +205,8 @@ class PDFView(QScrollArea):
                 cached = self._cache.get(i, self._zoom, 0)
                 if cached:
                     pw.set_pixmap(cached, self._zoom)
-                elif self._doc.path and not self._doc.is_modified:
-                    key = (i, round(self._zoom, 3))
+                elif self._doc.path and not self._doc.is_modified and not self._doc.is_encrypted:
+                    key = (i, round(self._zoom, 3), gen)
                     if key in self._rendering_keys:
                         continue
                     self._rendering_keys.add(key)
@@ -213,6 +217,7 @@ class PDFView(QScrollArea):
                     )
                     sig.done.connect(lambda _pn, _z, _pm, s=sig, k=key: self._release_render_signal(s, k))
                     sig.error.connect(lambda _pn, _msg, s=sig, k=key: self._release_render_signal(s, k))
+                    sig.error.connect(lambda pn, msg, g=gen: self._on_render_error(pn, msg, g))
                     self._pending_signals.append(sig)
                     PageRenderer.start_worker(self._doc.path, i, self._zoom, sig)
                 else:
@@ -220,15 +225,27 @@ class PDFView(QScrollArea):
                     try:
                         pm = PageRenderer.render_page_sync(fitz_doc[i], self._zoom)
                         self._on_render_done(i, self._zoom, pm, gen)
-                    except Exception:
-                        pass  # 渲染失敗則顯示灰色佔位
+                    except Exception as exc:
+                        self._on_render_error(i, str(exc), gen)
             elif abs(i - self._current_page) > 5:
                 pw.clear_pixmap()
 
+    def _on_render_error(self, page_num, message, gen):
+        if gen != self._render_gen:
+            return
+        for widget in self._page_widgets:
+            if widget.page_num == page_num:
+                widget.set_render_error(message)
+                break
+
     def _on_render_done(self, page_num: int, zoom: float, pm, gen: int = -1):
-        self._rendering_keys.discard((page_num, round(zoom, 3)))
+        self._rendering_keys.discard((page_num, round(zoom, 3), gen))
         if gen >= 0 and gen != self._render_gen:
             return   # 過時的渲染結果，丟棄
+        if self._doc is None:
+            return
+        if isinstance(pm, QImage):
+            pm = QPixmap.fromImage(pm)
         self._cache.put(page_num, zoom, 0, pm)
         if abs(zoom - self._zoom) < 0.001:
             for pw in self._page_widgets:
@@ -237,7 +254,7 @@ class PDFView(QScrollArea):
                     break
             self._container.adjustSize()
 
-    def _release_render_signal(self, signal, key: tuple[int, float]):
+    def _release_render_signal(self, signal, key: tuple[int, float, int]):
         self._rendering_keys.discard(key)
         try:
             self._pending_signals.remove(signal)
@@ -286,30 +303,30 @@ class PDFView(QScrollArea):
             self._v_ruler.set_zoom(self._zoom)
 
     def _on_document_modified(self):
-        """文件內容變更（標注/旋轉/浮水印等）→ 重新渲染但保留捲動位置。"""
-        if not self._doc or not self._doc.fitz_doc:
+        if not self._doc or self._doc.fitz_doc is None:
             return
         saved_page = self._current_page
-        self._pending_signals.clear()
-        self._rendering_keys.clear()
-        # 頁面數量沒變 → 只清當前頁快取並局部重繪（加標注的情境）
-        if len(self._page_widgets) == self._doc.fitz_doc.page_count:
-            self._cache.invalidate(saved_page)
-            self._render_visible_pages()
-        else:
-            # 頁數變了（插入/刪除頁）才做完整重建
-            self._cache.invalidate()
-            self._rebuild_pages()
-            self._restore_scroll(saved_page)
+        # Rotation, crop, reorder and edits can affect any page, even with an unchanged count.
+        self._cache.invalidate()
+        self._rebuild_pages()
+        self._restore_scroll(min(saved_page, max(self._doc.page_count - 1, 0)))
 
     def _on_document_saved(self):
-        # 儲存後從磁碟重新渲染（顯示含標注的版本）
-        saved_page = self._current_page
-        self._pending_signals.clear()
+        self.refresh()
+
+    def unload_document(self):
+        self._render_gen += 1
+        if self._doc is not None:
+            for signal, slot in ((self._doc.document_modified, self._on_document_modified),
+                                 (self._doc.document_saved, self._on_document_saved)):
+                try:
+                    signal.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
+        self._doc = None
+        self._active_tool = None
         self._rendering_keys.clear()
         self._cache.invalidate()
-        self._render_visible_pages()
-        self._restore_scroll(saved_page)
 
     def _restore_scroll(self, page_num: int):
         """恢復捲動到指定頁面。"""
@@ -323,7 +340,6 @@ class PDFView(QScrollArea):
     def refresh(self):
         """強制重新渲染所有可見頁面（供外部呼叫）。"""
         saved_page = self._current_page
-        self._pending_signals.clear()
         self._rendering_keys.clear()
         self._cache.invalidate()
         self._rebuild_pages()
@@ -333,6 +349,9 @@ class PDFView(QScrollArea):
         """主題切換時更新 viewport 與容器背景色。"""
         bg = QColor(hex_color)
         for widget in (self.viewport(), self._container):
+            # A local background survives Qt's palette reset when a view is reparented into a tab.
+            widget.setStyleSheet(f"background-color: {hex_color};")
+            widget.ensurePolished()
             widget.setAutoFillBackground(True)
             pal = widget.palette()
             pal.setColor(QPalette.ColorRole.Window, bg)
@@ -340,9 +359,14 @@ class PDFView(QScrollArea):
 
     # ── 公開控制 ─────────────────────────────────────────────────
     def set_zoom(self, zoom: float):
+        import math
+        if not math.isfinite(zoom):
+            return
+        saved_page = self._current_page
         self._zoom = max(0.1, min(zoom, 8.0))
         self._cache.invalidate()
         self._rebuild_pages()
+        self._restore_scroll(saved_page)
         self.zoom_changed.emit(self._zoom)
         self._sync_rulers()
 
@@ -411,6 +435,7 @@ class PDFView(QScrollArea):
                 )
                 break
         self.page_changed.emit(page_num)
+        self._render_visible_pages()
 
     def set_tool(self, tool):
         self._active_tool = tool
@@ -427,9 +452,11 @@ class PDFView(QScrollArea):
         """切換頁面檢視模式（連續 / 單頁 / 雙頁）。"""
         if self._layout_mode == mode:
             return
+        saved_page = self._current_page
         self._layout_mode = mode
         self._cache.invalidate()
         self._rebuild_pages()
+        self._restore_scroll(saved_page)
 
     # ── 尺規 & 格線 ──────────────────────────────────────────────
     def set_rulers_visible(self, visible: bool):

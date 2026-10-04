@@ -47,13 +47,17 @@ class SmartFilingEngine:
         ]
 
     def analyze_and_file(self, input_dir: str, output_dir: str,
-                         rules: list[FilingRule] | None = None) -> list[dict]:
+                         rules: list[FilingRule] | None = None,
+                         progress_callback=None, is_cancelled=None) -> list[dict]:
         """掃描 → 分析 → 命名 → 歸檔"""
         import fitz
         if rules is None:
             rules = self.default_legal_rules()
         results = []
-        for fname in os.listdir(input_dir):
+        files = sorted(os.listdir(input_dir))
+        for index, fname in enumerate(files):
+            if is_cancelled and is_cancelled(): break
+            if progress_callback: progress_callback(index + 1, len(files))
             if not fname.lower().endswith(".pdf"):
                 continue
             src = os.path.join(input_dir, fname)
@@ -85,10 +89,18 @@ class SmartFilingEngine:
             parties = re.findall(r"原告[：:]?\s*([^\n\s，,。]{2,8})", text)
             party_str = parties[0] if parties else ""
 
+            date_str = re.sub(r'[<>:"/\\|?*]', "", date_str)
+            party_str = re.sub(r'[<>:"/\\|?*]', "", party_str)
             subdir = (matched_rule.subdirectory
                       .replace("{date}", date_str)
                       .replace("{party}", party_str))
             out_dir = os.path.join(output_dir, subdir)
+            from pathlib import Path
+            root = Path(output_dir).resolve()
+            resolved = Path(out_dir).resolve()
+            if not resolved.is_relative_to(root):
+                results.append({'file': fname, 'error': '歸檔規則不能指向輸出資料夾之外。', 'ok': False})
+                continue
             os.makedirs(out_dir, exist_ok=True)
 
             out_name = (matched_rule.filename_template
@@ -99,7 +111,25 @@ class SmartFilingEngine:
             if not out_name.endswith(".pdf"):
                 out_name += ".pdf"
             dst = os.path.join(out_dir, out_name)
-            shutil.copy2(src, dst)
+            from core.file_io import atomic_output
+            candidate = Path(dst)
+            for suffix in range(10000):
+                target = candidate if suffix == 0 else candidate.with_name(f'{candidate.stem}_{suffix}{candidate.suffix}')
+                try:
+                    with atomic_output(target, source=src) as temporary:
+                        shutil.copy2(src, temporary)
+                    dst = str(target)
+                    break
+                except FileExistsError:
+                    continue
+                except Exception as exc:
+                    results.append({'file': fname, 'error': str(exc), 'ok': False})
+                    dst = None
+                    break
+            else:
+                results.append({'file': fname, 'error': '無法配置不重複的歸檔名稱。', 'ok': False})
+                dst = None
+            if dst is None: continue
             results.append({
                 "file": fname,
                 "category": matched_rule.category,

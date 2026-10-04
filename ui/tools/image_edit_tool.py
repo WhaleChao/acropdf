@@ -111,6 +111,7 @@ class ImageEditTool(BaseTool):
     """
     _hover_rect: QRect | None = field(default=None, repr=False)
     _selected_info: dict | None = field(default=None, repr=False)
+    _hover_page: int = field(default=-1, repr=False)
 
     # ── 滑鼠事件 ──────────────────────────────────────────────────
 
@@ -151,12 +152,8 @@ class ImageEditTool(BaseTool):
 
         img = _find_image_at(page, pdf_pt)
         if img:
-            zoom = getattr(widget, "_zoom", 1.0)
-            r = img["rect"]
-            self._hover_rect = QRect(
-                int(r.x0 * zoom), int(r.y0 * zoom),
-                int(r.width * zoom), int(r.height * zoom),
-            )
+            self._hover_rect = widget.pdf_rect_to_widget(img["rect"], page)
+            self._hover_page = widget.page_num
         else:
             self._hover_rect = None
         widget.update()
@@ -168,7 +165,7 @@ class ImageEditTool(BaseTool):
 
     def draw_overlay(self, widget, painter) -> None:
         """在游標下方的圖片周圍繪製選取框與控制點。"""
-        if self._hover_rect is None:
+        if self._hover_rect is None or self._hover_page != widget.page_num:
             return
         painter.save()
         # 虛線邊框
@@ -233,7 +230,7 @@ class ImageEditTool(BaseTool):
             pdf_pt.x + 200, pdf_pt.y + 200,
         )
         # 確保不超出頁面邊界
-        page_rect = page.rect
+        page_rect = page.rect * page.derotation_matrix
         insert_rect = insert_rect & page_rect  # 交集
         if insert_rect.is_empty:
             insert_rect = fitz.Rect(
@@ -242,15 +239,12 @@ class ImageEditTool(BaseTool):
                 min(pdf_pt.y + 200, page_rect.y1),
             )
 
-        self.doc.begin_op("插入圖片")
         try:
-            page.insert_image(insert_rect, filename=path)
+            fitz.Pixmap(path)
+            with self.doc.edit_transaction("插入圖片"):
+                page.insert_image(insert_rect, filename=path)
         except Exception as exc:
             QMessageBox.warning(widget, "插入失敗", f"無法插入圖片：\n{exc}")
-            print(f"[ImageEditTool] 插入圖片失敗: {exc}")
-        finally:
-            self.doc.end_op()
-            self.doc._mark_modified()
 
         self._refresh(widget)
 
@@ -273,19 +267,11 @@ class ImageEditTool(BaseTool):
 
         rect = self._selected_info["rect"]
 
-        self.doc.begin_op("替換圖片")
+        from core.content_editor import replace_image_region
         try:
-            # 先塗銷原圖區域
-            page.add_redact_annot(rect)
-            page.apply_redactions()
-            # 在原位置插入新圖片
-            page.insert_image(rect, filename=path)
+            replace_image_region(self.doc, widget.page_num, rect, filename=path)
         except Exception as exc:
-            QMessageBox.warning(widget, "替換失敗", f"無法替換圖片：\n{exc}")
-            print(f"[ImageEditTool] 替換圖片失敗: {exc}")
-        finally:
-            self.doc.end_op()
-            self.doc._mark_modified()
+            QMessageBox.warning(widget, "替換失敗", str(exc))
 
         self._selected_info = None
         self._refresh(widget)
@@ -312,16 +298,11 @@ class ImageEditTool(BaseTool):
 
         rect = self._selected_info["rect"]
 
-        self.doc.begin_op("刪除圖片")
+        from core.content_editor import replace_image_region
         try:
-            page.add_redact_annot(rect)
-            page.apply_redactions()
+            replace_image_region(self.doc, widget.page_num, rect)
         except Exception as exc:
-            QMessageBox.warning(widget, "刪除失敗", f"無法刪除圖片：\n{exc}")
-            print(f"[ImageEditTool] 刪除圖片失敗: {exc}")
-        finally:
-            self.doc.end_op()
-            self.doc._mark_modified()
+            QMessageBox.warning(widget, "刪除失敗", str(exc))
 
         self._selected_info = None
         self._refresh(widget)
@@ -352,28 +333,13 @@ class ImageEditTool(BaseTool):
             old_rect.x0 + new_w, old_rect.y0 + new_h,
         )
 
-        self.doc.begin_op("調整圖片大小")
+        from core.content_editor import replace_image_region
         try:
-            # 擷取原圖片資料
-            fd = self.doc.fitz_doc
-            img_data = fd.extract_image(xref)
-            if not img_data:
-                raise ValueError("無法擷取原始圖片資料")
-            image_bytes = img_data["image"]
-            ext = img_data.get("ext", "png")
-
-            # 塗銷舊圖
-            page.add_redact_annot(old_rect)
-            page.apply_redactions()
-
-            # 在新矩形插入原圖
-            page.insert_image(new_rect, stream=image_bytes)
+            image_bytes = self.doc.fitz_doc.extract_image(xref)["image"]
+            replace_image_region(self.doc, widget.page_num, old_rect,
+                                 stream=image_bytes, new_rect=new_rect)
         except Exception as exc:
-            QMessageBox.warning(widget, "調整失敗", f"無法調整圖片大小：\n{exc}")
-            print(f"[ImageEditTool] 調整圖片大小失敗: {exc}")
-        finally:
-            self.doc.end_op()
-            self.doc._mark_modified()
+            QMessageBox.warning(widget, "調整失敗", str(exc))
 
         self._selected_info = None
         self._refresh(widget)

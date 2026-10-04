@@ -29,7 +29,10 @@ class InstallThread(QThread):
         self.finished.emit(self._dep.name, success, msg)
 
 
-class DependencyDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class DependencyDialog(WorkerDialog):
     """
     缺少依賴時自動彈出的對話框。
     列出所有缺少的項目，每項提供「自動安裝」和「手動下載」按鈕。
@@ -45,6 +48,9 @@ class DependencyDialog(QDialog):
         self.setMinimumWidth(550)
         self.setModal(True)
         self._setup_ui()
+
+    def running_workers(self):
+        return super().running_workers() + [thread for thread in self._install_threads if thread.isRunning()]
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -99,7 +105,7 @@ class DependencyDialog(QDialog):
 
             # 安裝備註
             if dep.install_note:
-                note_label = QLabel(f"💡 {dep.install_note}")
+                note_label = QLabel(dep.install_note)
                 note_label.setWordWrap(True)
                 note_label.setStyleSheet("color: #007AFF; font-size: 10pt;")
                 group_layout.addWidget(note_label)
@@ -118,7 +124,7 @@ class DependencyDialog(QDialog):
             # 按鈕列
             btn_row = QHBoxLayout()
 
-            auto_btn = QPushButton("⚡ 自動安裝")
+            auto_btn = QPushButton("自動安裝")
             auto_btn.setStyleSheet(
                 "background: #27ae60; color: white; padding: 6px 16px; border-radius: 4px;")
             auto_btn.setToolTip(
@@ -126,7 +132,7 @@ class DependencyDialog(QDialog):
             auto_btn.clicked.connect(
                 lambda checked, d=dep: self._auto_install(d))
 
-            download_btn = QPushButton("📥 手動下載")
+            download_btn = QPushButton("手動下載")
             download_btn.setStyleSheet("padding: 6px 16px;")
             download_btn.clicked.connect(
                 lambda checked, url=dep.download_url: webbrowser.open(url))

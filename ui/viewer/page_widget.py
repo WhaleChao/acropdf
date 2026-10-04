@@ -9,6 +9,7 @@ class PageWidget(QWidget):
     clicked = pyqtSignal(int, QPoint)
     mouse_moved = pyqtSignal(int, QPoint)
     context_requested = pyqtSignal(int, QPoint)   # page_num, global_pos
+    render_retry = pyqtSignal()
 
     def __init__(self, page_num: int, parent=None):
         super().__init__(parent)
@@ -16,6 +17,7 @@ class PageWidget(QWidget):
         self._pixmap: QPixmap | None = None
         self._zoom = 1.0
         self._tool = None
+        self._render_error = ""
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setMouseTracking(True)   # 讓 mouseMoveEvent 在不按鍵時也觸發（測量工具需要）
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -28,11 +30,18 @@ class PageWidget(QWidget):
         return self._page_num
 
     def set_pixmap(self, pm: QPixmap, zoom: float):
+        self._render_error = ""
+        self.setToolTip("")
         self._pixmap = pm
         self._zoom = zoom
         logical_w = int(pm.width() / pm.devicePixelRatio())
         logical_h = int(pm.height() / pm.devicePixelRatio())
         self.setFixedSize(logical_w, logical_h)
+        self.update()
+
+    def set_render_error(self, message: str):
+        self._render_error = message
+        self.setToolTip(message)
         self.update()
 
     def clear_pixmap(self):
@@ -46,19 +55,32 @@ class PageWidget(QWidget):
     def widget_to_pdf(self, pt: QPoint, page: fitz.Page) -> fitz.Point:
         dpr = self._pixmap.devicePixelRatio() if self._pixmap else 1.0
         scale = self._zoom * dpr
-        return fitz.Point(pt.x() * dpr / scale, pt.y() * dpr / scale)
+        return fitz.Point(pt.x() * dpr / scale, pt.y() * dpr / scale) * page.derotation_matrix
+
+    def pdf_rect_to_widget(self, rect: fitz.Rect, page: fitz.Page):
+        from PyQt6.QtCore import QRect
+        bounds = fitz.Rect(rect) * page.rotation_matrix * fitz.Matrix(self._zoom, self._zoom)
+        return QRect(round(bounds.x0), round(bounds.y0), round(bounds.width), round(bounds.height))
 
     def paintEvent(self, event):
         painter = QPainter(self)
         if self._pixmap:
             painter.drawPixmap(0, 0, self._pixmap)
         else:
-            painter.fillRect(self.rect(), QColor(220, 220, 220))
+            painter.fillRect(self.rect(), self.palette().base())
+            painter.setPen(self.palette().text().color())
+            text = "此頁無法顯示\n點一下重新載入" if self._render_error else "正在載入頁面…"
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, text)
         if self._tool and hasattr(self._tool, 'draw_overlay'):
             self._tool.draw_overlay(self, painter)
         painter.end()
 
     def mousePressEvent(self, event):
+        if self._render_error:
+            self._render_error = ""
+            self.update()
+            self.render_retry.emit()
+            return
         self.clicked.emit(self._page_num, event.pos())
         if self._tool:
             self._tool.mouse_press(self, event, event.pos())

@@ -1,115 +1,86 @@
-# ~/Desktop/acropdf/core/ocr_engine.py
-"""
-跨平台 OCR 引擎。
-自動選擇最佳 backend：
-  macOS  → Apple Vision（繁中最佳）→ fallback Tesseract
-  Windows → WinRT OCR（內建免安裝）→ fallback Tesseract
-  Linux  → Tesseract
-所有平台限定的 import 都在 platform/ 內完成，此檔案不含任何平台限定 import。
-"""
+"""OCR runs on a private current-document snapshot and publishes atomically."""
+import threading
 import fitz
 from PyQt6.QtCore import QObject, pyqtSignal, QRunnable, QThreadPool, Qt
+from core.file_io import atomic_output
+
 
 class OCRSignals(QObject):
-    progress = pyqtSignal(int, int)   # current, total
-    finished = pyqtSignal(str)        # output_path
+    progress = pyqtSignal(int, int)
+    finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
+
+def _perform(doc, output, lang, dpi, pages, source=None, on_progress=None, cancelled=None):
+    from acro_platform import get_ocr_backend
+    if not 72 <= dpi <= 600: raise ValueError('OCR DPI 須介於 72 與 600。')
+    pages = list(pages)
+    if not pages or len(set(pages)) != len(pages) or any(p < 0 or p >= len(doc) for p in pages):
+        raise ValueError('OCR 頁面範圍無效。')
+    backend = get_ocr_backend()
+    with atomic_output(output, source=source) as temporary:
+        for index, page_num in enumerate(pages):
+            if cancelled and cancelled(): raise RuntimeError('OCR 已取消；未產生不完整的輸出。')
+            backend.ocr_page(doc[page_num], lang, dpi)
+            if on_progress: on_progress(index + 1, len(pages))
+        if cancelled and cancelled(): raise RuntimeError('OCR 已取消；未產生不完整的輸出。')
+        doc.save(temporary, garbage=4, deflate=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+    return str(output)
+
+
 class OCRWorker(QRunnable):
-    def __init__(self, input_path: str, output_path: str, lang: str,
-                 dpi: int, page_range: range, signals: OCRSignals):
+    def __init__(self, snapshot, source, password, output, lang, dpi, pages, signals):
         super().__init__()
-        self.setAutoDelete(True)
-        self._input = input_path
-        self._output = output_path
-        self._lang = lang
-        self._dpi = dpi
-        self._page_range = page_range
+        self.snapshot, self.source, self.password = snapshot, source, password
+        self.output, self.lang, self.dpi, self.pages = output, lang, dpi, pages
         self.signals = signals
-        self._keep_signals = signals  # 防 GC
+        self._running = True
+        self._cancelled = threading.Event()
+
+    def isRunning(self): return self._running
+    def requestInterruption(self): self._cancelled.set()
 
     def run(self):
-        """完全例外隔離 — 任何錯誤只 emit signal，不 raise"""
         try:
-            # 透過 platform 層自動選最佳 backend
-            from acro_platform import get_ocr_backend
-            backend = get_ocr_backend()
-            print(f"[OCR] 使用引擎：{backend.name}")
+            with fitz.open('pdf', self.snapshot) as doc:
+                if doc.needs_pass and not doc.authenticate(self.password): raise ValueError('OCR 快照需要密碼。')
+                path = _perform(doc, self.output, self.lang, self.dpi, self.pages, source=self.source,
+                                on_progress=self.signals.progress.emit, cancelled=self._cancelled.is_set)
+            self._running = False
+            self.signals.finished.emit(path)
+        except Exception as exc:
+            self._running = False
+            self.signals.error.emit(str(exc))
+        finally:
+            self.snapshot = None; self.password = ''
 
-            doc = fitz.open(self._input)
-            try:
-                total = len(self._page_range)
-                for i, page_num in enumerate(self._page_range):
-                    page = doc[page_num]
-                    backend.ocr_page(page, self._lang, self._dpi)
-                    self.signals.progress.emit(i + 1, total)
-                doc.save(self._output, garbage=4, deflate=True)
-            finally:
-                doc.close()
-            self.signals.finished.emit(self._output)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            try:
-                self.signals.error.emit(str(e))
-            except Exception:
-                pass
 
 class OCREngine:
     @staticmethod
-    def run_sync(input_path: str, output_path: str,
-                 lang: str = "chi_tra+eng", dpi: int = 300,
-                 page_range: range = None,
-                 on_progress=None) -> str:
-        """同步版本（供批次處理 / 無 Qt 事件迴圈的場合使用）。"""
+    def run_sync(input_path, output_path, lang='chi_tra+eng', dpi=300, page_range=None, on_progress=None, password=''):
+        with fitz.open(input_path) as doc:
+            if doc.needs_pass and not doc.authenticate(password): raise ValueError('OCR 來源需要正確密碼。')
+            pages = page_range if page_range is not None else range(len(doc))
+            return _perform(doc, output_path, lang, dpi, pages, input_path, on_progress)
+
+    @staticmethod
+    def get_backend_name():
         from acro_platform import get_ocr_backend
-        backend = get_ocr_backend()
-        doc = fitz.open(input_path)
-        try:
-            pages = page_range if page_range is not None else range(doc.page_count)
-            total = len(pages)
-            for i, page_num in enumerate(pages):
-                backend.ocr_page(doc[page_num], lang, dpi)
-                if on_progress:
-                    on_progress(i + 1, total)
-            doc.save(output_path, garbage=4, deflate=True)
-        finally:
-            doc.close()
-        return output_path
-
+        return get_ocr_backend().name
 
     @staticmethod
-    def get_backend_name() -> str:
-        """回傳當前平台會使用的 OCR 引擎名稱"""
-        try:
-            from acro_platform import get_ocr_backend
-            return get_ocr_backend().name
-        except Exception:
-            return "無"
+    def get_supported_languages():
+        from acro_platform import get_ocr_backend
+        return get_ocr_backend().supported_languages()
 
     @staticmethod
-    def get_supported_languages() -> list[str]:
-        """回傳當前平台支援的 OCR 語言清單"""
-        try:
-            from acro_platform import get_ocr_backend
-            return get_ocr_backend().supported_languages()
-        except Exception:
-            return ["eng"]
-
-    @staticmethod
-    def run_async(doc, output_path: str, lang: str = "chi_tra+eng",
-                  dpi: int = 300, page_range: range = None,
+    def run_async(doc, output_path, lang='chi_tra+eng', dpi=300, page_range=None,
                   on_progress=None, on_finished=None, on_error=None):
-        if not doc or not doc.path:
-            return
-        pages = page_range or range(doc.page_count)
+        if doc is None or doc.fitz_doc is None: raise ValueError('尚未載入文件。')
         signals = OCRSignals()
-        if on_progress:
-            signals.progress.connect(on_progress, Qt.ConnectionType.QueuedConnection)
-        if on_finished:
-            signals.finished.connect(on_finished, Qt.ConnectionType.QueuedConnection)
-        if on_error:
-            signals.error.connect(on_error, Qt.ConnectionType.QueuedConnection)
-        worker = OCRWorker(doc.path, output_path, lang, dpi, pages, signals)
-        worker._keep_signals = signals
+        for signal, callback in ((signals.progress, on_progress), (signals.finished, on_finished), (signals.error, on_error)):
+            if callback: signal.connect(callback, Qt.ConnectionType.QueuedConnection)
+        pages = list(page_range if page_range is not None else range(doc.page_count))
+        worker = OCRWorker(doc._snapshot(), doc.source_path, doc._password, output_path, lang, dpi, pages, signals)
         QThreadPool.globalInstance().start(worker)
+        return worker

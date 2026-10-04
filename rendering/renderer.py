@@ -5,7 +5,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, QRunnable, QThreadPool, QMutex
 from PyQt6.QtWidgets import QApplication
 
 class RenderSignals(QObject):
-    done = pyqtSignal(int, float, QPixmap)   # page_num, zoom, pixmap
+    done = pyqtSignal(int, float, QImage)   # QPixmap must only be created on the GUI thread.
     error = pyqtSignal(int, str)
 
 class RenderWorker(QRunnable):
@@ -26,8 +26,10 @@ class RenderWorker(QRunnable):
         try:
             doc = fitz.open(self._path)
             if self._page_num >= doc.page_count:
+                if self._signals:
+                    self._signals.error.emit(self._page_num, "頁面已不存在")
                 return
-            pm = PageRenderer.render_page_sync(
+            pm = PageRenderer.render_page_image(
                 doc[self._page_num], self._zoom, self._rotation, self._dpr
             )
             if self._signals:
@@ -47,7 +49,21 @@ class PageRenderer:
         rotation: int = 0,
         device_pixel_ratio: float = 1.0,
     ) -> QPixmap:
-        scale = zoom * device_pixel_ratio
+        image = PageRenderer.render_page_image(page, zoom, rotation, device_pixel_ratio)
+        return QPixmap.fromImage(image)
+
+    @staticmethod
+    def render_page_image(page, zoom, rotation=0, device_pixel_ratio=1.0) -> QImage:
+        import math
+        if not math.isfinite(zoom) or zoom <= 0 or not math.isfinite(device_pixel_ratio) or device_pixel_ratio <= 0:
+            raise ValueError("渲染比例必須為有限正數。")
+        rect = page.rect
+        if rect.width <= 0 or rect.height <= 0:
+            raise ValueError("頁面尺寸不適用。")
+        # Bound both allocations and dimensions, including oversize/hostile PDF pages.
+        scale = min(zoom * device_pixel_ratio,
+                    math.sqrt(24_000_000 / (rect.width * rect.height)),
+                    16384 / max(rect.width, rect.height))
         mat = fitz.Matrix(scale, scale).prerotate(rotation)
         pix = page.get_pixmap(matrix=mat, alpha=False, colorspace=fitz.csRGB)
         # zero-copy QImage via samples_ptr
@@ -56,9 +72,8 @@ class PageRenderer:
             QImage.Format.Format_RGB888
         )
         img = img.copy()  # 解除對 MuPDF buffer 的依賴
-        pm = QPixmap.fromImage(img)
-        pm.setDevicePixelRatio(device_pixel_ratio)
-        return pm
+        img.setDevicePixelRatio(scale / zoom)
+        return img
 
     @staticmethod
     def make_signals() -> RenderSignals:

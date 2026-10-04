@@ -4,11 +4,32 @@ AcroPDF 是單機版 PDF 編輯工具，目標是提供接近商用 PDF 編輯�
 
 ## 目前版本
 
-- app version: `1.0.18`
-- 已驗證測試：`103 passed`
+- app version: `1.1.0`（內部測試候選版）
+- 已驗證測試：`242 passed`（本次 macOS arm64 / Python 3.14）
 - macOS 產物：`AcroPDF.dmg`
 - Windows 產物：`AcroPDF_Setup.exe`、`AcroPDF_win.zip`（由 GitHub Actions 的 Windows runner 建置）
 - Release 產物會附 `.sha256` checksum。
+
+## 品質改善與已知限制
+
+- 日間、夜間、跟隨系統主題；工具搜尋與 Cmd/Ctrl K 指令搜尋；小視窗自適應歡迎工作區。
+- 原子保存、加密工作恢復、分頁／渲染一致性、真正的 radio 群組、FDF 往返與保留外觀的表單／註解扁平化。
+- 永久塗黑移除底層內容；局部文字／圖片編輯加入範圍檢查與失敗回復。
+- 遠端 AI 文字傳送前明確詢問目的地與頁範圍。
+- PDF/A-1b／2b／3b 真正轉換、ICC 與字型嵌入，通過 veraPDF 才發佈輸出。
+- PDF/X-1a:2001／3:2002／4 使用印刷 ICC；檢查 ICC、字型、頁面邊界及渲染，仍需印刷廠的獨立印前驗收。
+- 無障礙內容標記包含 MCID、ParentTree、圖片替代文字、標題層級、閱讀順序；PDF/UA-1 匯出經 veraPDF 機器驗證，閱讀語意仍需人工審查。
+- 字型真正替換、嵌入與子集化；OCR 保留畫面並寫入可搜尋文字；XFDF 註解交換、Office 經 LibreOffice 保留版面匯入。
+- 批次加密使用設定密碼、Bates 連續編號、同名輸入區分、歸檔碰撞保護、取消時安全保留工作者。
+- 此版本未取得獎項，也未完成授權、正式程式碼簽章、公證、Windows 實機與跨閱讀器商用驗收。
+
+修正清單、驗證範圍與剩餘商用門檻見 [品質審查](docs/QUALITY_REVIEW.md) 與 [第三方授權](docs/THIRD_PARTY.md)。
+
+可重跑的畫面與大檔檢查：
+
+```bash
+python scripts/quality_review.py --output work/quality-review
+```
 
 ## OpenDesk TW 一站式整合
 
@@ -68,6 +89,7 @@ xattr -dr com.apple.quarantine /Applications/AcroPDF.app
 ## 從原始碼打包
 
 ```bash
+python3 -m pip install -r requirements-lock.txt
 python3 -m pytest -q
 python3 build_mac.py --skip-preflight
 ```
@@ -111,4 +133,4 @@ Get-Content .\AcroPDF_Setup.exe.sha256
 ## 注意
 
 - `dist/`、`build/`、PDF 測試檔與 PyInstaller spec 檔不進版控。
-- 針對私有安裝，正式 DMG 會放在 GitHub Release asset。
+- 針對私有安裝，內部測試 DMG 會放在 GitHub Release asset。

@@ -7,6 +7,7 @@ from typing import Optional
 
 import fitz
 import requests
+from core.ai_endpoint import confirm_document_transfer
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QProgressBar, QGroupBox,
@@ -77,7 +78,9 @@ class _TranslateWorker(QThread):
             ],
             "temperature": 0.2,
         }
-        resp = requests.post(self._endpoint, json=payload, timeout=self.TIMEOUT)
+        resp = requests.post(self._endpoint, json=payload, timeout=self.TIMEOUT, allow_redirects=False)
+        if 300 <= resp.status_code < 400:
+            raise ValueError("AI 端點重新導向已停止，請使用服務的直接 HTTPS 網址。")
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"]
@@ -107,10 +110,16 @@ class _TranslateWorker(QThread):
             translated_parts: list[str] = []
 
             for idx, chunk in enumerate(chunks, 1):
+                if self.isInterruptionRequested():
+                    self.error.emit("已取消")
+                    return
                 self.progress.emit(f"正在翻譯第 {idx}/{len(chunks)} 段⋯⋯")
                 result = self._call_llm(chunk)
                 translated_parts.append(result)
 
+            if self.isInterruptionRequested():
+                self.error.emit("已取消")
+                return
             self.finished.emit("\n\n".join(translated_parts))
 
         except requests.exceptions.Timeout:
@@ -242,6 +251,10 @@ class TranslateDialog(QDialog):
             QMessageBox.warning(self, "無法翻譯", "文件中未偵測到可提取的文字。")
             return
 
+        endpoint = self._endpoint_edit.text().strip() or self._DEFAULT_ENDPOINT
+        if not confirm_document_transfer(self, endpoint, len(pages_text)):
+            return
+
         self._run_btn.setEnabled(False)
         self._progress.show()
         self._result_edit.clear()
@@ -369,3 +382,18 @@ class TranslateDialog(QDialog):
                 QMessageBox.information(self, "完成", f"翻譯已匯出至\n{path}")
             except OSError as exc:
                 QMessageBox.critical(self, "匯出失敗", str(exc))
+
+    def reject(self):
+        if self._worker and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._progress.setFormat("正在停止，等候目前請求完成…")
+            return
+        super().reject()
+
+    def closeEvent(self, event):
+        if self._worker and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._progress.setFormat("正在停止，等候目前請求完成…")
+            event.ignore()
+            return
+        super().closeEvent(event)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import os
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import fitz
@@ -35,20 +36,26 @@ class PDFDocument(QObject):
         self._magi_manager = None
         self._undo_stack: list[bytes] = []
         self._redo_stack: list[bytes] = []
+        self.last_error = ""
+        self._was_encrypted = False
+        self._password = ""
 
     # ── 開啟 / 關閉 ──────────────────────────────────────────────
     def open(self, path: str, password: str = "") -> bool:
         normalized = os.path.abspath(path)
+        self.last_error = ""
         try:
             doc = fitz.open(normalized)
         except Exception:
             try:
                 from core.file_converter import FileConverter
                 doc = FileConverter.convert(normalized)
-            except Exception:
+            except Exception as exc:
+                self.last_error = str(exc)
                 return False
         if doc is None:
             return False
+        was_encrypted = bool(doc.needs_pass or doc.is_encrypted)
         if doc.needs_pass:
             if not doc.authenticate(password):
                 doc.close()
@@ -56,10 +63,17 @@ class PDFDocument(QObject):
                 return False
         if self._fitz_doc:
             self._fitz_doc.close()
+        # Converters may return an in-memory PDF. Never overwrite the Office source.
+        if not doc.is_pdf:
+            converted = fitz.open("pdf", doc.convert_to_pdf())
+            doc.close()
+            doc = converted
         self._fitz_doc = doc
-        self._path = normalized if doc.is_pdf else None
+        self._path = normalized if normalized.lower().endswith(".pdf") else None
         self._source_path = normalized
-        self._modified = False
+        self._modified = self._path is None
+        self._was_encrypted = was_encrypted
+        self._password = password
         self._journal_enable()
         self.page_count_changed.emit(doc.page_count)
         return True
@@ -68,11 +82,14 @@ class PDFDocument(QObject):
         if self._fitz_doc:
             self._fitz_doc.close()
         self._fitz_doc = fitz.open()
+        self._fitz_doc.new_page(width=595, height=842)
         self._path = None
         self._source_path = None
-        self._modified = False
+        self._modified = True
+        self._was_encrypted = False
+        self._password = ""
         self._journal_enable()
-        self.page_count_changed.emit(0)
+        self.page_count_changed.emit(1)
 
     def close(self):
         if self._fitz_doc:
@@ -83,16 +100,26 @@ class PDFDocument(QObject):
         self._modified = False
         self._undo_stack.clear()
         self._redo_stack.clear()
+        self._was_encrypted = False
+        self._password = ""
 
     # ── 存檔 ─────────────────────────────────────────────────────
     def save(self, path: str | None = None, incremental: bool = False) -> bool:
         if self._fitz_doc is None:
             return False
-        out = os.path.abspath(path or self._path or "")
-        if not out:
+        self.last_error = ""
+        target = path or self._path
+        if not target:
+            self.last_error = "請選擇 PDF 儲存位置。"
             return False
+        out = os.path.abspath(os.path.expanduser(target))
         try:
             same_target = bool(self._path) and os.path.abspath(self._path) == out
+            if self._source_path and self._path is None and os.path.abspath(self._source_path) == out:
+                raise ValueError("請另存 PDF，不能覆寫來源圖片或 Office 文件。")
+            if any(widget.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE and widget.is_signed
+                   for page in self._fitz_doc for widget in (page.widgets() or ())):
+                raise ValueError("此文件含數位簽章。為避免失效，請保留原檔；修改與重新簽署需另行處理。")
             if incremental and same_target:
                 self._fitz_doc.save(out, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
             else:
@@ -103,6 +130,7 @@ class PDFDocument(QObject):
             self.document_saved.emit()
             return True
         except Exception as e:
+            self.last_error = str(e)
             print(f"[PDFDocument] save error: {e}")
             return False
 
@@ -131,6 +159,10 @@ class PDFDocument(QObject):
     @property
     def is_modified(self) -> bool:
         return self._modified
+
+    @property
+    def is_encrypted(self) -> bool:
+        return self._was_encrypted
 
     def _mark_modified(self):
         self._modified = True
@@ -237,7 +269,7 @@ class PDFDocument(QObject):
         if self._fitz_doc is None:
             return b""
         buf = io.BytesIO()
-        self._fitz_doc.save(buf, garbage=0, deflate=False)
+        self._fitz_doc.save(buf, garbage=0, deflate=False, encryption=fitz.PDF_ENCRYPT_KEEP)
         return buf.getvalue()
 
     def begin_op(self, name: str):
@@ -257,16 +289,46 @@ class PDFDocument(QObject):
         """操作後呼叫（快照模式下為空操作，保留 API 相容性）。"""
         pass
 
+    @contextmanager
+    def edit_transaction(self, name: str):
+        """Restore content and history if a multi-step edit fails."""
+        before = self._snapshot()
+        undo, redo = list(self._undo_stack), list(self._redo_stack)
+        modified = self._modified
+        self.begin_op(name)
+        try:
+            yield
+        except Exception:
+            restored = fitz.open("pdf", before)
+            if restored.needs_pass and not restored.authenticate(self._password):
+                restored.close()
+                raise RuntimeError("無法回復加密文件的編輯快照")
+            self._fitz_doc.close()
+            self._fitz_doc = restored
+            self._undo_stack, self._redo_stack = undo, redo
+            self._modified = modified
+            self.page_count_changed.emit(restored.page_count)
+            self.document_modified.emit()
+            raise
+        else:
+            self.end_op()
+            self._mark_modified()
+
     def undo(self) -> bool:
         if self._fitz_doc is None or not self._undo_stack:
             return False
         try:
             # 儲存目前狀態到 redo
-            self._redo_stack.append(self._snapshot())
-            snap = self._undo_stack.pop()
+            current = self._snapshot()
+            snap = self._undo_stack[-1]
             new_doc = fitz.open("pdf", snap)
+            if new_doc.needs_pass and not new_doc.authenticate(self._password):
+                new_doc.close()
+                raise ValueError("加密文件快照需要認證")
             self._fitz_doc.close()
             self._fitz_doc = new_doc
+            self._undo_stack.pop()
+            self._redo_stack.append(current)
             self._mark_modified()
             self.page_count_changed.emit(self._fitz_doc.page_count)
             return True
@@ -277,11 +339,16 @@ class PDFDocument(QObject):
         if self._fitz_doc is None or not self._redo_stack:
             return False
         try:
-            self._undo_stack.append(self._snapshot())
-            snap = self._redo_stack.pop()
+            current = self._snapshot()
+            snap = self._redo_stack[-1]
             new_doc = fitz.open("pdf", snap)
+            if new_doc.needs_pass and not new_doc.authenticate(self._password):
+                new_doc.close()
+                raise ValueError("加密文件快照需要認證")
             self._fitz_doc.close()
             self._fitz_doc = new_doc
+            self._redo_stack.pop()
+            self._undo_stack.append(current)
             self._mark_modified()
             self.page_count_changed.emit(self._fitz_doc.page_count)
             return True
@@ -299,7 +366,12 @@ class PDFDocument(QObject):
         fd, tmp_path = tempfile.mkstemp(prefix="acropdf_save_", suffix=".pdf", dir=target_dir)
         os.close(fd)
         try:
-            self._fitz_doc.save(tmp_path, garbage=4, deflate=True)
+            self._fitz_doc.save(tmp_path, garbage=4, deflate=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+            with open(tmp_path, "rb") as handle:
+                os.fsync(handle.fileno())
+            if os.path.exists(output_path):
+                import stat
+                os.chmod(tmp_path, stat.S_IMODE(os.stat(output_path).st_mode))
             os.replace(tmp_path, output_path)
         finally:
             if os.path.exists(tmp_path):

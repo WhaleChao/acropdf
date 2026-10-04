@@ -1,0 +1,955 @@
+{
+  "commercial_distribution_cleared": false,
+  "dependencies": [
+    {
+      "package": "requests",
+      "version": "2.32.5",
+      "license": "Apache-2.0",
+      "files": [
+        {
+          "installed_path": "requests-2.32.5.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/requests-2.32.5/5ffe5c63-LICENSE",
+          "sha256": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b"
+        }
+      ]
+    },
+    {
+      "package": "lxml",
+      "version": "6.1.3",
+      "license": "BSD-3-Clause",
+      "files": [
+        {
+          "installed_path": "lxml-6.1.3.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/lxml-6.1.3/792e684e-LICENSE.txt",
+          "sha256": "8fc2b568133516e46845d2147917adeee1648e70ae9ab5ed6c5417afef4ce855"
+        },
+        {
+          "installed_path": "lxml-6.1.3.dist-info/licenses/LICENSES.txt",
+          "bundled_path": "resources/third-party/licenses/lxml-6.1.3/088fcc0a-LICENSES.txt",
+          "sha256": "388fa99f3bde4447cd5a4cbb114037be026854db6cfe89e112691c1d8abdcf3c"
+        }
+      ]
+    },
+    {
+      "package": "fonttools",
+      "version": "4.66.1",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "fonttools-4.66.1.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/fonttools-4.66.1/c75b60f8-LICENSE",
+          "sha256": "6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383"
+        },
+        {
+          "installed_path": "fonttools-4.66.1.dist-info/licenses/LICENSE.external",
+          "bundled_path": "resources/third-party/licenses/fonttools-4.66.1/910ff3fd-LICENSE.external",
+          "sha256": "94a83aaee0729a0f302d34acc4acecbd9d58366f262429075fe557e4a54b2e69"
+        }
+      ]
+    },
+    {
+      "package": "packaging",
+      "version": "26.3",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "files": [
+        {
+          "installed_path": "packaging-26.3.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/packaging-26.3/11c854e2-LICENSE",
+          "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+        },
+        {
+          "installed_path": "packaging-26.3.dist-info/licenses/LICENSE.APACHE",
+          "bundled_path": "resources/third-party/licenses/packaging-26.3/e9a5bac8-LICENSE.APACHE",
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "installed_path": "packaging-26.3.dist-info/licenses/LICENSE.BSD",
+          "bundled_path": "resources/third-party/licenses/packaging-26.3/ef96a084-LICENSE.BSD",
+          "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+        }
+      ]
+    },
+    {
+      "package": "iniconfig",
+      "version": "2.3.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "iniconfig-2.3.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/iniconfig-2.3.0/7be90225-LICENSE",
+          "sha256": "3409fa91f7ace557894632676656e32264fe5ef7581535725dc9a23774551bd4"
+        }
+      ]
+    },
+    {
+      "package": "altgraph",
+      "version": "0.17.5",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "altgraph-0.17.5.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/altgraph-0.17.5/fb197afb-LICENSE",
+          "sha256": "6c194d6db0c64d45535d10c95142b9b0cda7b7dcc7f1ddee302b3d536f3dbe46"
+        }
+      ]
+    },
+    {
+      "package": "PyQt6_sip",
+      "version": "13.13.0",
+      "license": "BSD-2-Clause",
+      "files": [
+        {
+          "installed_path": "pyqt6_sip-13.13.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/PyQt6_sip-13.13.0/74c1e251-LICENSE",
+          "sha256": "3e6f5b427c36f94ecf86bc01698af7030a1ed6eb3748110d5dbb8d142d804611"
+        }
+      ]
+    },
+    {
+      "package": "Pygments",
+      "version": "2.21.0",
+      "license": "BSD-2-Clause",
+      "files": [
+        {
+          "installed_path": "pygments-2.21.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/Pygments-2.21.0/62c35449-LICENSE",
+          "sha256": "a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17"
+        }
+      ]
+    },
+    {
+      "package": "wrapt",
+      "version": "2.5.0",
+      "license": "BSD-2-Clause",
+      "files": [
+        {
+          "installed_path": "wrapt-2.5.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/wrapt-2.5.0/621aa058-LICENSE",
+          "sha256": "d4f66854a24dda2f2a5282912aedebe6b18186b86284510a433d78fadcd88e5d"
+        }
+      ]
+    },
+    {
+      "package": "pytesseract",
+      "version": "0.3.13",
+      "license": "Apache License 2.0",
+      "files": [
+        {
+          "installed_path": "pytesseract-0.3.13.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pytesseract-0.3.13/85cf1d75-LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ]
+    },
+    {
+      "package": "openpyxl",
+      "version": "3.1.5",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "openpyxl-3.1.5.dist-info/LICENCE.rst",
+          "bundled_path": "resources/third-party/licenses/openpyxl-3.1.5/3895b927-LICENCE.rst",
+          "sha256": "0c84bb42f5d367e5ebf9fc2dde35b16141df5ee0fdc189250858bc6c5560f69e"
+        }
+      ]
+    },
+    {
+      "package": "asn1crypto",
+      "version": "1.5.1",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "asn1crypto-1.5.1.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/asn1crypto-1.5.1/0b7f5ee8-LICENSE",
+          "sha256": "29c3425e5da53ab842273e5f2f2f068ce2e35df4260f7fa156aa1ac6bed02433"
+        }
+      ]
+    },
+    {
+      "package": "pyinstaller",
+      "version": "6.19.0",
+      "license": "GPLv2-or-later with a special exception which allows to use PyInstaller to build and distribute non-free programs (including commercial ones)",
+      "files": [
+        {
+          "installed_path": "pyinstaller-6.19.0.dist-info/licenses/COPYING.txt",
+          "bundled_path": "resources/third-party/licenses/pyinstaller-6.19.0/acc6b806-COPYING.txt",
+          "sha256": "dcf75fdb959db1e3b41c0f8505069d2ece781b5ec6b3d0a4d30975cfc6580245"
+        }
+      ]
+    },
+    {
+      "package": "python-pptx",
+      "version": "1.0.2",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "python_pptx-1.0.2.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/python-pptx-1.0.2/4624c0cf-LICENSE",
+          "sha256": "7652f271e46d0d533e9dc463f3b5fcbdcacf4d6a9c8d6b554d15efd0f37f6132"
+        }
+      ]
+    },
+    {
+      "package": "et_xmlfile",
+      "version": "2.0.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "et_xmlfile-2.0.0.dist-info/LICENCE.python",
+          "bundled_path": "resources/third-party/licenses/et_xmlfile-2.0.0/fba5b042-LICENCE.python",
+          "sha256": "4ccdaaebc0f44b83720ec0399bb7ab329adce067dd62f73c5535a2dc05628ab2"
+        },
+        {
+          "installed_path": "et_xmlfile-2.0.0.dist-info/LICENCE.rst",
+          "bundled_path": "resources/third-party/licenses/et_xmlfile-2.0.0/b2e8b3b2-LICENCE.rst",
+          "sha256": "0c84bb42f5d367e5ebf9fc2dde35b16141df5ee0fdc189250858bc6c5560f69e"
+        }
+      ]
+    },
+    {
+      "package": "PyQt6",
+      "version": "6.11.0",
+      "license": "GPL-3.0-only",
+      "files": [
+        {
+          "installed_path": "pyqt6-6.11.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/PyQt6-6.11.0/7f3f873d-LICENSE",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+        }
+      ]
+    },
+    {
+      "package": "pyinstaller-hooks-contrib",
+      "version": "2026.8",
+      "license": "review required",
+      "files": [
+        {
+          "installed_path": "pyinstaller_hooks_contrib-2026.8.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pyinstaller-hooks-contrib-2026.8/a5a70da5-LICENSE",
+          "sha256": "91d0baaff00773038e72c0a1fc9d5d2d38706b7a2b9c04f34296608f931b9cd0"
+        }
+      ]
+    },
+    {
+      "package": "Deprecated",
+      "version": "3.0.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "deprecated-3.0.0.dist-info/licenses/LICENSE.md",
+          "bundled_path": "resources/third-party/licenses/Deprecated-3.0.0/0e1d90b8-LICENSE.md",
+          "sha256": "a210fe0b9e9f2c0123e873f5347e9091f51cfd12863aebbe8da71f24cf804fd2"
+        }
+      ]
+    },
+    {
+      "package": "pyobjc-framework-Quartz",
+      "version": "12.1",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pyobjc_framework_quartz-12.1.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pyobjc-framework-Quartz-12.1/f83b0875-LICENSE.txt",
+          "sha256": "0ca04b07928d4872b9d9bb22187ca0426dd8bfab08f26eada0999a71dc81aaff"
+        }
+      ]
+    },
+    {
+      "package": "pyobjc-framework-Vision",
+      "version": "12.1",
+      "license": "MIT",
+      "files": []
+    },
+    {
+      "package": "pyobjc-framework-CoreML",
+      "version": "12.2.2",
+      "license": "MIT",
+      "files": []
+    },
+    {
+      "package": "pillow",
+      "version": "12.1.1",
+      "license": "MIT-CMU",
+      "files": [
+        {
+          "installed_path": "pillow-12.1.1.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pillow-12.1.1/160b42aa-LICENSE",
+          "sha256": "30178bf7aff9f8dc82afed35086cd378a9064e77fcb4380485f38b5da3377052"
+        }
+      ]
+    },
+    {
+      "package": "pikepdf",
+      "version": "10.5.1",
+      "license": "MPL-2.0",
+      "files": [
+        {
+          "installed_path": "pikepdf-10.5.1.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pikepdf-10.5.1/6bf69088-LICENSE.txt",
+          "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+        }
+      ]
+    },
+    {
+      "package": "PyQt6-Qt6",
+      "version": "6.11.2",
+      "license": "LGPL v3",
+      "files": [
+        {
+          "installed_path": "pyqt6_qt6-6.11.2.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/PyQt6-Qt6-6.11.2/0b7f0239-LICENSE",
+          "sha256": "6c671e2912ec69c0832f32066c0313cee5fdc3bbcbce237822e89f3da58edd4e"
+        }
+      ]
+    },
+    {
+      "package": "pyHanko",
+      "version": "0.34.1",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pyhanko-0.34.1.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pyHanko-0.34.1/f8ed5f69-LICENSE",
+          "sha256": "a697e75ab287bc6bc4886da62198a2b9930a62f1ad34c191f58d556d8625c062"
+        },
+        {
+          "installed_path": "pyhanko-0.34.1.dist-info/licenses/src/pyhanko/pdf_utils/LICENSE.PyPDF2",
+          "bundled_path": "resources/third-party/licenses/pyHanko-0.34.1/b662a03c-LICENSE.PyPDF2",
+          "sha256": "f04bd89131d1346a34bd4d94b2927da1ef925bdcf29e0dd3c630d610a6d08505"
+        }
+      ]
+    },
+    {
+      "package": "pyobjc-framework-Cocoa",
+      "version": "12.2.2",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pyobjc_framework_cocoa-12.2.2.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pyobjc-framework-Cocoa-12.2.2/65e184eb-LICENSE.txt",
+          "sha256": "0ca04b07928d4872b9d9bb22187ca0426dd8bfab08f26eada0999a71dc81aaff"
+        }
+      ]
+    },
+    {
+      "package": "setuptools",
+      "version": "84.0.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "setuptools-84.0.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/aeab75b4-LICENSE",
+          "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+        },
+        {
+          "installed_path": "setuptools/_vendor/autocommand-2.2.2.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/b8b1f5f0-LICENSE",
+          "sha256": "ade78d04982d69972d444a8e14a94f87a2334dd3855cc80348ea8e240aa0df2d"
+        },
+        {
+          "installed_path": "setuptools/_vendor/backports.tarfile-1.2.0.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/c9e41e71-LICENSE",
+          "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+        },
+        {
+          "installed_path": "setuptools/_vendor/importlib_metadata-8.7.1.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/4a7fd6a9-LICENSE",
+          "sha256": "458502e12d97bbf64438606a20044aa85eb05fb0a8a807bb35dbec253fd1fc04"
+        },
+        {
+          "installed_path": "setuptools/_vendor/jaraco.text-4.0.0.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/9fe05a31-LICENSE",
+          "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+        },
+        {
+          "installed_path": "setuptools/_vendor/jaraco_context-6.1.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/4d09286a-LICENSE",
+          "sha256": "9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683"
+        },
+        {
+          "installed_path": "setuptools/_vendor/jaraco_functools-4.4.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/63a92caf-LICENSE",
+          "sha256": "5a57cb4db85e2a2dd88c290628908add57e3451449e0a9a71fdfb38776fd759d"
+        },
+        {
+          "installed_path": "setuptools/_vendor/more_itertools-10.8.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/6562dd76-LICENSE",
+          "sha256": "09f1c8c9e941af3e584d59641ea9b87d83c0cb0fd007eb5ef391a7e2643c1a46"
+        },
+        {
+          "installed_path": "setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/c2780f51-LICENSE",
+          "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+        },
+        {
+          "installed_path": "setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.APACHE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/123439bf-LICENSE.APACHE",
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "installed_path": "setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.BSD",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/c80865de-LICENSE.BSD",
+          "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+        },
+        {
+          "installed_path": "setuptools/_vendor/platformdirs-4.4.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/d6b8bc45-LICENSE",
+          "sha256": "29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6"
+        },
+        {
+          "installed_path": "setuptools/_vendor/tomli-2.4.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/1ab641e9-LICENSE",
+          "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+        },
+        {
+          "installed_path": "setuptools/_vendor/wheel-0.46.3.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/8b28658c-LICENSE.txt",
+          "sha256": "30c23618679108f3e8ea1d2a658c7ca417bdfc891c98ef1a89fa4ff0c9828654"
+        },
+        {
+          "installed_path": "setuptools/_vendor/zipp-3.23.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/0e45092c-LICENSE",
+          "sha256": "5a57cb4db85e2a2dd88c290628908add57e3451449e0a9a71fdfb38776fd759d"
+        },
+        {
+          "installed_path": "setuptools/config/NOTICE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/4094fd35-NOTICE",
+          "sha256": "2dddf08818297a3b89d43d95ff659d8da85741108c9136dfa3a4d856c0623bd8"
+        },
+        {
+          "installed_path": "setuptools/config/_validate_pyproject/NOTICE",
+          "bundled_path": "resources/third-party/licenses/setuptools-84.0.0/e972ee51-NOTICE",
+          "sha256": "09c9bcea95ca086f8bc5bed174e40bc835b297d40fb5f86bbbb570fe0a5581a7"
+        }
+      ]
+    },
+    {
+      "package": "urllib3",
+      "version": "2.8.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "urllib3-2.8.0.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/urllib3-2.8.0/3677f050-LICENSE.txt",
+          "sha256": "130e3a64d5fdd5d096a752694634a7d9df284469de86e5732100268041e3d686"
+        }
+      ]
+    },
+    {
+      "package": "pycparser",
+      "version": "3.0",
+      "license": "BSD-3-Clause",
+      "files": [
+        {
+          "installed_path": "pycparser-3.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pycparser-3.0/b4cf246d-LICENSE",
+          "sha256": "0c846399369ea76ddd7b5c44fe6d16497415fcf015f5cbb508c24bf98b81c5b1"
+        }
+      ]
+    },
+    {
+      "package": "PyMuPDF",
+      "version": "1.27.1",
+      "license": "Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License",
+      "files": [
+        {
+          "installed_path": "pymupdf-1.27.1.dist-info/COPYING",
+          "bundled_path": "resources/third-party/licenses/PyMuPDF-1.27.1/d0873ff9-COPYING",
+          "sha256": "40e60697600535eabfb5ae05f72829d88cfe8d02dd4792f5a754f6f51dabe55b"
+        }
+      ]
+    },
+    {
+      "package": "PyYAML",
+      "version": "6.0.3",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pyyaml-6.0.3.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/PyYAML-6.0.3/1f5c9467-LICENSE",
+          "sha256": "8d3928f9dc4490fd635707cb88eb26bd764102a7282954307d3e5167a577e8a4"
+        }
+      ]
+    },
+    {
+      "package": "macholib",
+      "version": "1.16.4",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "macholib-1.16.4.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/macholib-1.16.4/7f2d5c6b-LICENSE",
+          "sha256": "47082ab2bc0184123ec9f10fdf80c70723ee68f07d44382e17615c2a6ba70b09"
+        }
+      ]
+    },
+    {
+      "package": "uritools",
+      "version": "6.1.3",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "uritools-6.1.3.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/uritools-6.1.3/845f622f-LICENSE",
+          "sha256": "28c000b52b0ee27138a68ef778227e4057046e86b65f62f1cacb99b0cc49e0d2"
+        }
+      ]
+    },
+    {
+      "package": "pyobjc-core",
+      "version": "12.2.2",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "PyObjCTest/copying.cpython-314-darwin.so.dSYM/Contents/Resources/Relocations/aarch64/copying.cpython-314-darwin.so.yml",
+          "bundled_path": "resources/third-party/licenses/pyobjc-core-12.2.2/334e12fb-copying.cpython-314-darwin.so.yml",
+          "sha256": "3bcb9f2cd813453dc7f2e1d81f3accdd33f441941bfc2c11dee44e77b368c5b4"
+        },
+        {
+          "installed_path": "PyObjCTest/copying.cpython-314-darwin.so.dSYM/Contents/Resources/Relocations/x86_64/copying.cpython-314-darwin.so.yml",
+          "bundled_path": "resources/third-party/licenses/pyobjc-core-12.2.2/57a61e9e-copying.cpython-314-darwin.so.yml",
+          "sha256": "c95b75de7edceb688194110ed30d580462b76ec3ece571760ffa412029638670"
+        }
+      ]
+    },
+    {
+      "package": "cffi",
+      "version": "2.1.1",
+      "license": "MIT-0",
+      "files": [
+        {
+          "installed_path": "cffi-2.1.1.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/cffi-2.1.1/2e2d841f-LICENSE",
+          "sha256": "5ba24ddc57067f9249add644c3afc41a5d6dc37e23433ef759d95df370b0af63"
+        }
+      ]
+    },
+    {
+      "package": "pyhanko-certvalidator",
+      "version": "0.30.2",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pyhanko_certvalidator-0.30.2.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pyhanko-certvalidator-0.30.2/0c840f97-LICENSE",
+          "sha256": "69a81f57c51fd024f52712b1fa538187c251df9cc9ee5658ff9884ab4f409ccd"
+        }
+      ]
+    },
+    {
+      "package": "certifi",
+      "version": "2026.7.22",
+      "license": "MPL-2.0",
+      "files": [
+        {
+          "installed_path": "certifi-2026.7.22.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/certifi-2026.7.22/c1aedbaa-LICENSE",
+          "sha256": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7"
+        }
+      ]
+    },
+    {
+      "package": "tzlocal",
+      "version": "5.4.4",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "tzlocal-5.4.4.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/tzlocal-5.4.4/c21bf5d6-LICENSE.txt",
+          "sha256": "d99ab209aeb16aad2c25c90ffd83c1a981e290ffff76a420a2ab03e03f041b8c"
+        }
+      ]
+    },
+    {
+      "package": "pytest",
+      "version": "9.0.3",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pytest-9.0.3.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pytest-9.0.3/5832e8fe-LICENSE",
+          "sha256": "ca836a5f9ecca3b2f350230faa20a48fb8b145653b5568d784862df864706b9b"
+        }
+      ]
+    },
+    {
+      "package": "pluggy",
+      "version": "1.6.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pluggy-1.6.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pluggy-1.6.0/a308a425-LICENSE",
+          "sha256": "d6b65e6c213a5d0b577911d34d6e5949b9f59d76c238c5071a2f3fc16cfb2606"
+        }
+      ]
+    },
+    {
+      "package": "python-docx",
+      "version": "1.2.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "python_docx-1.2.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/python-docx-1.2.0/5af0446e-LICENSE",
+          "sha256": "7652f271e46d0d533e9dc463f3b5fcbdcacf4d6a9c8d6b554d15efd0f37f6132"
+        }
+      ]
+    },
+    {
+      "package": "xlsxwriter",
+      "version": "3.2.9",
+      "license": "BSD-2-Clause",
+      "files": [
+        {
+          "installed_path": "xlsxwriter-3.2.9.dist-info/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/xlsxwriter-3.2.9/234f76e7-LICENSE.txt",
+          "sha256": "cf08b60a4ded986b58a617cb8304373bda5c4eff42fb4e30d7597b616e116e87"
+        }
+      ]
+    },
+    {
+      "package": "typing_extensions",
+      "version": "4.16.0",
+      "license": "PSF-2.0",
+      "files": [
+        {
+          "installed_path": "typing_extensions-4.16.0.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/typing_extensions-4.16.0/2231b6c4-LICENSE",
+          "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+        }
+      ]
+    },
+    {
+      "package": "pypdf",
+      "version": "6.7.5",
+      "license": "BSD-3-Clause",
+      "files": [
+        {
+          "installed_path": "pypdf-6.7.5.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pypdf-6.7.5/2b0ce78f-LICENSE",
+          "sha256": "a97ac230e5f33ef10a5367a850eb01f91f1a0b064e34742c7794d2294557f524"
+        }
+      ]
+    },
+    {
+      "package": "charset-normalizer",
+      "version": "3.5.2",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "charset_normalizer-3.5.2.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/charset-normalizer-3.5.2/37deb541-LICENSE",
+          "sha256": "6d0d41bfe170ac6c7dc248c9a63e254d0fb45a60d50a8257d0af92c6e249b887"
+        }
+      ]
+    },
+    {
+      "package": "reportlab",
+      "version": "4.4.10",
+      "license": "BSD license (see license.txt for details), Copyright (c) 2000-2025, ReportLab Inc.",
+      "files": [
+        {
+          "installed_path": "reportlab-4.4.10.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/reportlab-4.4.10/f15c1447-LICENSE",
+          "sha256": "ef831761646313921375fc2cb888e8eeaf7da213d0b92852c10c42f3a0b4d138"
+        },
+        {
+          "installed_path": "reportlab/fonts/DarkGarden-copying-gpl.txt",
+          "bundled_path": "resources/third-party/licenses/reportlab-4.4.10/0ec46867-DarkGarden-copying-gpl.txt",
+          "sha256": "1b2a567f289f66a143c56353e7b3d4fa5862514a5e3c5cfdf8b02ee5e5aaa953"
+        },
+        {
+          "installed_path": "reportlab/fonts/DarkGarden-copying.txt",
+          "bundled_path": "resources/third-party/licenses/reportlab-4.4.10/6ba8e754-DarkGarden-copying.txt",
+          "sha256": "3cd1020510efa7f6b3166a5a2740f92bd664a695ea179e0bda442e74cd0ef3a4"
+        },
+        {
+          "installed_path": "reportlab/fonts/bitstream-vera-license.txt",
+          "bundled_path": "resources/third-party/licenses/reportlab-4.4.10/f2a1f1ac-bitstream-vera-license.txt",
+          "sha256": "3361d054759a2fc686a2c058be82deaf9c2e6fe549be9004d7935a6c1736315d"
+        }
+      ]
+    },
+    {
+      "package": "pymupdf-fonts",
+      "version": "1.0.5",
+      "license": "SIL OFL V1.1",
+      "files": [
+        {
+          "installed_path": "pymupdf_fonts-1.0.5.dist-info/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pymupdf-fonts-1.0.5/59184071-LICENSE.txt",
+          "sha256": "161e5eb253bc4dc130dcf37555ffc283833d8538c19b057d22bbaecfc1156f73"
+        }
+      ]
+    },
+    {
+      "package": "cryptography",
+      "version": "46.0.5",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "files": [
+        {
+          "installed_path": "cryptography-46.0.5.dist-info/licenses/LICENSE",
+          "bundled_path": "resources/third-party/licenses/cryptography-46.0.5/9f033425-LICENSE",
+          "sha256": "3e0c7c091a948b82533ba98fd7cbb40432d6f1a9acbf85f5922d2f99a93ae6bb"
+        },
+        {
+          "installed_path": "cryptography-46.0.5.dist-info/licenses/LICENSE.APACHE",
+          "bundled_path": "resources/third-party/licenses/cryptography-46.0.5/81be3e4a-LICENSE.APACHE",
+          "sha256": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe"
+        },
+        {
+          "installed_path": "cryptography-46.0.5.dist-info/licenses/LICENSE.BSD",
+          "bundled_path": "resources/third-party/licenses/cryptography-46.0.5/dc35da55-LICENSE.BSD",
+          "sha256": "602c4c7482de6479dd2e9793cda275e5e63d773dacd1eca689232ab7008fb4fb"
+        }
+      ]
+    },
+    {
+      "package": "pip",
+      "version": "26.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/eb304749-LICENSE.txt",
+          "sha256": "634300a669d49aeae65b12c6c48c924c51a4cdf3d1ff086dc3456dc8bcaa2104"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/cachecontrol/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/50b5382b-LICENSE.txt",
+          "sha256": "86eeee87be2a43f3ff1f56496f451f69243926f025fedbb033666c304c4c161b"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/certifi/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/7afcfe92-LICENSE",
+          "sha256": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/dependency_groups/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/2c9772d6-LICENSE.txt",
+          "sha256": "1ab36e3e2a4ba8631625384f87e9e091db1faed034c5b23325b3239abf2cc525"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/distlib/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/c291f41e-LICENSE.txt",
+          "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/distro/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/00cf0c08-LICENSE",
+          "sha256": "cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/7476c793-LICENSE.md",
+          "sha256": "b7a336abf3b04e180ec065cdd16e705d079e1cc7a14f910aa6e9187f36b9cd87"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/msgpack/COPYING",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/0138661d-COPYING",
+          "sha256": "492dedba85da5872f78e6091bcd1fea474d660d35acb4dee964b8aab3f007427"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/packaging/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/7faebaf3-LICENSE",
+          "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/packaging/LICENSE.APACHE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/bd396219-LICENSE.APACHE",
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/packaging/LICENSE.BSD",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/7e7c2b65-LICENSE.BSD",
+          "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/pkg_resources/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/24a0ff98-LICENSE",
+          "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/platformdirs/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/1c4b4f00-LICENSE",
+          "sha256": "29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/pygments/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/5bad85d4-LICENSE",
+          "sha256": "a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/pyproject_hooks/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/3a4c3848-LICENSE",
+          "sha256": "1b22b049b5267d6dfc23a67bf4a84d8ec04b9fdfb1a51d360e42b4342c8b4154"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/requests/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/749ff277-LICENSE",
+          "sha256": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/resolvelib/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/de868cfd-LICENSE",
+          "sha256": "f388fd38cad13112c1dc0f669bbe80e7f84541edbafb72f3030d2ca7642c3c9d"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/rich/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/fccdf21f-LICENSE",
+          "sha256": "deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/tomli/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/c1fddb01-LICENSE",
+          "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/tomli_w/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/d7565306-LICENSE",
+          "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/truststore/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/0b5ef9f8-LICENSE",
+          "sha256": "33be7b7e8fa4fd19b1760e1a8ed8a668bdab852c91b692dd41424bcb725a9fca"
+        },
+        {
+          "installed_path": "pip-26.0.dist-info/licenses/src/pip/_vendor/urllib3/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/c948d31f-LICENSE.txt",
+          "sha256": "c37bf186e27cf9dbe9619e55edfe3cea7b30091ceb3da63c7dacbe0e6d77907b"
+        },
+        {
+          "installed_path": "pip/_vendor/cachecontrol/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/c41fdd4a-LICENSE.txt",
+          "sha256": "86eeee87be2a43f3ff1f56496f451f69243926f025fedbb033666c304c4c161b"
+        },
+        {
+          "installed_path": "pip/_vendor/certifi/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/ba5c9fe9-LICENSE",
+          "sha256": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7"
+        },
+        {
+          "installed_path": "pip/_vendor/dependency_groups/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/ef85ffb2-LICENSE.txt",
+          "sha256": "1ab36e3e2a4ba8631625384f87e9e091db1faed034c5b23325b3239abf2cc525"
+        },
+        {
+          "installed_path": "pip/_vendor/distlib/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/e976c6a8-LICENSE.txt",
+          "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d"
+        },
+        {
+          "installed_path": "pip/_vendor/distro/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/a2ada580-LICENSE",
+          "sha256": "cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14"
+        },
+        {
+          "installed_path": "pip/_vendor/idna/LICENSE.md",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/c983bbef-LICENSE.md",
+          "sha256": "b7a336abf3b04e180ec065cdd16e705d079e1cc7a14f910aa6e9187f36b9cd87"
+        },
+        {
+          "installed_path": "pip/_vendor/msgpack/COPYING",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/28d0dd68-COPYING",
+          "sha256": "492dedba85da5872f78e6091bcd1fea474d660d35acb4dee964b8aab3f007427"
+        },
+        {
+          "installed_path": "pip/_vendor/packaging/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/840f56b8-LICENSE",
+          "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+        },
+        {
+          "installed_path": "pip/_vendor/packaging/LICENSE.APACHE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/eb332b84-LICENSE.APACHE",
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "installed_path": "pip/_vendor/packaging/LICENSE.BSD",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/6d4ee335-LICENSE.BSD",
+          "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+        },
+        {
+          "installed_path": "pip/_vendor/pkg_resources/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/e2746e42-LICENSE",
+          "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+        },
+        {
+          "installed_path": "pip/_vendor/platformdirs/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/5847ccf1-LICENSE",
+          "sha256": "29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6"
+        },
+        {
+          "installed_path": "pip/_vendor/pygments/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/b04af226-LICENSE",
+          "sha256": "a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17"
+        },
+        {
+          "installed_path": "pip/_vendor/pyproject_hooks/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/d9a107c5-LICENSE",
+          "sha256": "1b22b049b5267d6dfc23a67bf4a84d8ec04b9fdfb1a51d360e42b4342c8b4154"
+        },
+        {
+          "installed_path": "pip/_vendor/requests/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/1ee72cc7-LICENSE",
+          "sha256": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b"
+        },
+        {
+          "installed_path": "pip/_vendor/resolvelib/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/9e7a953a-LICENSE",
+          "sha256": "f388fd38cad13112c1dc0f669bbe80e7f84541edbafb72f3030d2ca7642c3c9d"
+        },
+        {
+          "installed_path": "pip/_vendor/rich/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/c71e4af6-LICENSE",
+          "sha256": "deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15"
+        },
+        {
+          "installed_path": "pip/_vendor/tomli/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/1e6e78cd-LICENSE",
+          "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+        },
+        {
+          "installed_path": "pip/_vendor/tomli_w/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/94559abf-LICENSE",
+          "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+        },
+        {
+          "installed_path": "pip/_vendor/truststore/LICENSE",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/5049051d-LICENSE",
+          "sha256": "33be7b7e8fa4fd19b1760e1a8ed8a668bdab852c91b692dd41424bcb725a9fca"
+        },
+        {
+          "installed_path": "pip/_vendor/urllib3/LICENSE.txt",
+          "bundled_path": "resources/third-party/licenses/pip-26.0/559b62f8-LICENSE.txt",
+          "sha256": "c37bf186e27cf9dbe9619e55edfe3cea7b30091ceb3da63c7dacbe0e6d77907b"
+        }
+      ]
+    },
+    {
+      "package": "idna",
+      "version": "3.20",
+      "license": "BSD-3-Clause",
+      "files": [
+        {
+          "installed_path": "idna-3.20.dist-info/licenses/LICENSE.md",
+          "bundled_path": "resources/third-party/licenses/idna-3.20/d91c8e1d-LICENSE.md",
+          "sha256": "1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04"
+        }
+      ]
+    },
+    {
+      "package": "oscrypto",
+      "version": "1.3.0",
+      "license": "MIT",
+      "files": [
+        {
+          "installed_path": "oscrypto-1.3.0.dist-info/LICENSE",
+          "bundled_path": "resources/third-party/licenses/oscrypto-1.3.0/30b4589b-LICENSE",
+          "sha256": "29c3425e5da53ab842273e5f2f2f068ce2e35df4260f7fa156aa1ac6bed02433"
+        }
+      ]
+    }
+  ]
+}

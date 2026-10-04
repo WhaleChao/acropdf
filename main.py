@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.0.18"
+APP_VERSION = "1.1.0"
 APP_PUBLISHER = "WhaleChao"
 
 # OpenDesk 整合命令必須在載入 Qt 前執行，才能用於快速健康檢查與無介面 LIVE 驗證。
@@ -139,6 +139,7 @@ def main():
 
     # 讓 app 知道視窗已就緒，處理待開檔案
     app.set_main_window(window)
+    QTimer.singleShot(0, window.offer_recovery)
 
     # 若從命令列帶入 PDF 路徑（支援多檔）
     for arg in sys.argv[1:]:
@@ -181,15 +182,8 @@ def _is_dark_mode() -> bool:
 
 
 def _load_stylesheet(app: QApplication):
-    base_dir = os.path.dirname(__file__)
-    theme = "dark" if _is_dark_mode() else "light"
-    qss_path = os.path.join(base_dir, "resources", "styles", f"{theme}.qss")
-    # fallback to light if dark not found
-    if not os.path.isfile(qss_path):
-        qss_path = os.path.join(base_dir, "resources", "styles", "light.qss")
-    if os.path.isfile(qss_path):
-        with open(qss_path, encoding="utf-8") as f:
-            app.setStyleSheet(f.read())
+    from ui.theme import theme_manager
+    theme_manager()
 
 
 def _set_app_icon(app: QApplication):

@@ -15,6 +15,14 @@ class SecurityManager:
             raise RuntimeError("尚未載入文件")
         return doc
 
+    def _private_copy(self):
+        self._safe_fitz()
+        copied = fitz.open("pdf", self._doc._snapshot())
+        if copied.needs_pass and not copied.authenticate(self._doc._password):
+            copied.close()
+            raise ValueError("無法認證安全性處理快照。")
+        return copied
+
     def encrypt(self, output_path: str,
                 owner_pw: str = "", user_pw: str = "",
                 owner_password: str | None = None,
@@ -35,6 +43,8 @@ class SecurityManager:
         # 相容新舊參數命名
         _owner = owner_password if owner_password is not None else owner_pw
         _user = user_password if user_password is not None else user_pw
+        if not _owner:
+            raise ValueError("請指定擁有者密碼，以保護文件管理權限。")
 
         perm_flags = 0
         if permissions is not None:
@@ -71,14 +81,10 @@ class SecurityManager:
             if allow_print_hq and _printhq:
                 perm_flags |= _printhq
 
-        doc.save(
-            output_path,
-            encryption=encryption,
-            owner_pw=_owner,
-            user_pw=_user,
-            permissions=perm_flags,
-            garbage=4, deflate=True,
-        )
+        from core.file_io import atomic_output
+        with self._private_copy() as copied, atomic_output(output_path, source=self._doc.source_path) as temporary:
+            copied.save(temporary, encryption=encryption, owner_pw=_owner, user_pw=_user,
+                     permissions=perm_flags, garbage=4, deflate=True)
 
     def get_detailed_permissions(self) -> dict:
         """回傳詳細權限資訊，包含進階旗標"""
@@ -101,14 +107,12 @@ class SecurityManager:
     def remove_security(self, output_path: str):
         """需已通過驗證（doc.authenticate 成功）"""
         doc = self._safe_fitz()
-        doc.save(
-            output_path,
-            encryption=fitz.PDF_ENCRYPT_NONE,
-            garbage=4, deflate=True,
-        )
+        from core.file_io import atomic_output
+        with self._private_copy() as copied, atomic_output(output_path, source=self._doc.source_path) as temporary:
+            copied.save(temporary, encryption=fitz.PDF_ENCRYPT_NONE, garbage=4, deflate=True)
 
     def is_encrypted(self) -> bool:
-        return self._fitz.needs_pass if self._fitz else False
+        return self._doc.is_encrypted
 
     def get_permissions(self) -> dict:
         if self._fitz is None:

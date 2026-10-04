@@ -1,16 +1,14 @@
 # ~/Desktop/acropdf/ui/dialogs/accessibility/accessibility_dialog.py
-"""PDF/UA 無障礙標記對話框 — 檢查並新增文件結構標記。"""
-
-from typing import Optional
+"""基礎無障礙檢查及文件標題、語言設定；不宣告 PDF/UA 合規。"""
 
 import fitz
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QProgressBar, QGroupBox,
     QFormLayout, QLineEdit, QMessageBox, QComboBox,
-    QDialogButtonBox,
+    QFileDialog, QAbstractItemView, QDialogButtonBox, QTableWidget, QTableWidgetItem, QHeaderView, QTreeWidget, QTreeWidgetItem, QInputDialog,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt
 
 
 # ---------------------------------------------------------------------------
@@ -29,165 +27,17 @@ LANG_OPTIONS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-#  背景執行緒：自動標記
-# ---------------------------------------------------------------------------
-
-class _AutoTagWorker(QThread):
-    """在背景執行緒中對文件進行自動結構標記。"""
-
-    finished = pyqtSignal(dict)   # 回傳統計資訊
-    error = pyqtSignal(str)
-    progress = pyqtSignal(int)    # 0-100
-
-    def __init__(self, doc, title: str, lang: str, parent=None):
-        super().__init__(parent)
-        self._doc = doc
-        self._title = title
-        self._lang = lang
-
-    def run(self):  # noqa: D401
-        try:
-            fitz_doc = self._doc.fitz_doc
-            page_count = self._doc.page_count
-            stats = {
-                "paragraphs": 0,
-                "images": 0,
-                "images_no_alt": 0,
-                "pages": page_count,
-            }
-
-            # --- 1. 設定文件層級標記資訊 ---
-            self.progress.emit(5)
-
-            # 更新中繼資料
-            meta = fitz_doc.metadata or {}
-            if self._title:
-                meta["title"] = self._title
-            meta["producer"] = meta.get("producer", "") or "AcroPDF"
-            fitz_doc.set_metadata(meta)
-
-            # --- 2. 設定 MarkInfo 與 StructTreeRoot ---
-            self.progress.emit(10)
-            try:
-                # 取得或建立 Catalog 的 MarkInfo
-                cat_xref = fitz_doc.pdf_catalog()
-
-                # 設定 /MarkInfo << /Marked true >>
-                fitz_doc.xref_set_key(cat_xref, "MarkInfo", "<< /Marked true >>")
-
-                # 設定文件語言
-                fitz_doc.xref_set_key(cat_xref, "Lang", f"({self._lang})")
-
-                # ViewerPreferences — 顯示文件標題
-                if self._title:
-                    fitz_doc.xref_set_key(
-                        cat_xref,
-                        "ViewerPreferences",
-                        "<< /DisplayDocTitle true >>",
-                    )
-
-            except Exception:
-                # 部分 PDF 結構可能不支援，忽略此步驟
-                pass
-
-            # --- 3. 建立 StructTreeRoot（如不存在）---
-            self.progress.emit(15)
-            try:
-                existing_tree = fitz_doc.xref_get_key(cat_xref, "StructTreeRoot")
-                if existing_tree[0] == "null" or existing_tree[1] == "null":
-                    # 建立新的 StructTreeRoot xref
-                    new_xref = fitz_doc.get_new_xref()
-                    fitz_doc.update_object(
-                        new_xref,
-                        f"<< /Type /StructTreeRoot /K [] /ParentTree << /Nums [] >> >>",
-                    )
-                    fitz_doc.xref_set_key(cat_xref, "StructTreeRoot", f"{new_xref} 0 R")
-                    struct_root_xref = new_xref
-                else:
-                    # 解析現有 xref
-                    ref_str = existing_tree[1]
-                    if "R" in ref_str:
-                        struct_root_xref = int(ref_str.split()[0])
-                    else:
-                        struct_root_xref = None
-            except Exception:
-                struct_root_xref = None
-
-            # --- 4. 逐頁分析文字區塊與圖片 ---
-            kid_refs: list[str] = []
-
-            for page_idx in range(page_count):
-                pct = 20 + int(70 * page_idx / max(page_count, 1))
-                self.progress.emit(pct)
-
-                page = fitz_doc[page_idx]
-
-                # 文字區塊 → Paragraph 標記
-                blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE).get("blocks", [])
-                for block in blocks:
-                    if block.get("type") == 0:  # 文字區塊
-                        stats["paragraphs"] += 1
-
-                        if struct_root_xref is not None:
-                            try:
-                                p_xref = fitz_doc.get_new_xref()
-                                fitz_doc.update_object(
-                                    p_xref,
-                                    f"<< /Type /StructElem /S /P /P {struct_root_xref} 0 R >>",
-                                )
-                                kid_refs.append(f"{p_xref} 0 R")
-                            except Exception:
-                                pass
-
-                    elif block.get("type") == 1:  # 圖片區塊
-                        stats["images"] += 1
-                        stats["images_no_alt"] += 1
-
-                        if struct_root_xref is not None:
-                            try:
-                                fig_xref = fitz_doc.get_new_xref()
-                                alt_text = fitz.get_pdf_str(f"第 {page_idx + 1} 頁圖片")
-                                fitz_doc.update_object(
-                                    fig_xref,
-                                    f"<< /Type /StructElem /S /Figure /P {struct_root_xref} 0 R "
-                                    f"/Alt {alt_text} >>",
-                                )
-                                kid_refs.append(f"{fig_xref} 0 R")
-                                # 有 placeholder alt-text，不再列為「無替代文字」
-                                stats["images_no_alt"] -= 1
-                            except Exception:
-                                pass
-
-            # --- 5. 更新 StructTreeRoot 的 /K 陣列 ---
-            self.progress.emit(92)
-            if struct_root_xref is not None and kid_refs:
-                try:
-                    k_array = "[" + " ".join(kid_refs) + "]"
-                    fitz_doc.xref_set_key(struct_root_xref, "K", k_array)
-                except Exception:
-                    pass
-
-            self.progress.emit(100)
-            self.finished.emit(stats)
-
-        except Exception as exc:
-            self.error.emit(f"自動標記失敗：{exc}")
+from ui.widgets.worker_dialog import WorkerDialog
 
 
-# ---------------------------------------------------------------------------
-#  對話框
-# ---------------------------------------------------------------------------
-
-class AccessibilityDialog(QDialog):
+class AccessibilityDialog(WorkerDialog):
     """PDF/UA 無障礙標記對話框。"""
 
     def __init__(self, doc, parent=None):
         super().__init__(parent)
         self._doc = doc
-        self._worker: Optional[_AutoTagWorker] = None
-        self.setWindowTitle("無障礙標記（PDF/UA）")
-        self.resize(560, 480)
+        self.setWindowTitle("無障礙內容標記與閱讀順序")
+        self.resize(720, 700)
         self._setup_ui()
         self._check_status()
 
@@ -223,6 +73,29 @@ class AccessibilityDialog(QDialog):
         settings_form.addRow("設定語言：", self._lang_combo)
 
         root.addWidget(settings_group)
+        self._image_alts = QTableWidget(0, 3)
+        self._image_alts.setHorizontalHeaderLabels(["頁面", "圖片編號", "替代文字（描述圖片意義）"])
+        self._image_alts.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        images = {}
+        for page in self._doc.fitz_doc:
+            for image in page.get_images(full=True): images.setdefault(image[0], []).append(str(page.number+1))
+        for xref, pages in images.items():
+            row = self._image_alts.rowCount(); self._image_alts.insertRow(row)
+            for column, text in enumerate([", ".join(pages), str(xref), ""]):
+                item = QTableWidgetItem(text)
+                if column < 2: item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self._image_alts.setItem(row, column, item)
+        self._image_alts.setVisible(bool(images)); root.addWidget(self._image_alts)
+        self._structure = QTreeWidget(); self._structure.setHeaderLabels(["閱讀結構", "頁面", "替代文字"])
+        self._structure.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self._structure.itemDoubleClicked.connect(self._edit_tag)
+        root.addWidget(self._structure)
+        order_row = QHBoxLayout()
+        for text, delta in [("標記上移", -1), ("標記下移", 1)]:
+            button = QPushButton(text); button.clicked.connect(lambda checked=False, d=delta: self._move_section(d)); order_row.addWidget(button)
+        table_button = QPushButton("將所選文字標為表格"); table_button.clicked.connect(self._create_table); order_row.addWidget(table_button)
+        hint = QLabel("雙擊文字標記可調整標題層級；圖片標記可編輯替代文字。閱讀順序和語意請逐頁人工審閱。")
+        hint.setWordWrap(True); root.addLayout(order_row); root.addWidget(hint)
 
         # --- 進度條 ---
         self._progress = QProgressBar()
@@ -241,7 +114,8 @@ class AccessibilityDialog(QDialog):
         # --- 底部按鈕 ---
         btn_row = QHBoxLayout()
 
-        self._tag_btn = QPushButton("自動標記")
+        self._tag_btn = QPushButton("建立內容標記")
+        self._tag_btn.setToolTip("建立文字與圖片的 MCID 及 ParentTree；保留既有結構樹。")
         self._tag_btn.clicked.connect(self._run_auto_tag)
         btn_row.addWidget(self._tag_btn)
 
@@ -249,6 +123,9 @@ class AccessibilityDialog(QDialog):
         self._meta_btn.clicked.connect(self._update_metadata_only)
         btn_row.addWidget(self._meta_btn)
 
+        self._ua_btn = QPushButton("驗證並匯出 PDF/UA")
+        self._ua_btn.clicked.connect(self._export_ua)
+        btn_row.addWidget(self._ua_btn)
         btn_row.addStretch()
 
         close_btn = QPushButton("關閉")
@@ -273,7 +150,18 @@ class AccessibilityDialog(QDialog):
         except Exception:
             pass
 
-        self._tagged_label.setText("已標記" if is_tagged else "未標記")
+        from core.accessibility_engine import AccessibilityEngine
+        tree = AccessibilityEngine().get_structure_tree(fitz_doc)
+        self._tag_btn.setEnabled(tree is None)
+        self._structure.clear()
+        def populate(node, parent):
+            item = QTreeWidgetItem([node.type, str(node.page+1), node.alt_text or ""])
+            item.setData(0, Qt.ItemDataRole.UserRole, node.xref)
+            parent.addChild(item) if isinstance(parent, QTreeWidgetItem) else parent.addTopLevelItem(item)
+            for child in node.children: populate(child, item)
+        if tree: populate(tree, self._structure)
+        self._structure.expandToDepth(2)
+        self._tagged_label.setText("有標記宣告（未驗證完整性）" if is_tagged else "未標記")
         self._tagged_label.setStyleSheet(
             "color: green; font-weight: bold;" if is_tagged
             else "color: red; font-weight: bold;"
@@ -295,6 +183,10 @@ class AccessibilityDialog(QDialog):
 
         self._lang_label.setText(doc_lang or "（未設定）")
 
+        from core.accessibility_engine import AccessibilityEngine
+        issues = AccessibilityEngine().validate_pdfua(fitz_doc)
+        self._report_edit.setPlainText("\n".join(item["message"] for item in issues))
+
         # 預選語言
         if doc_lang:
             for i in range(self._lang_combo.count()):
@@ -305,63 +197,51 @@ class AccessibilityDialog(QDialog):
     # -- 動作 --
 
     def _run_auto_tag(self):
-        if self._worker and self._worker.isRunning():
-            return
-
-        title = self._title_edit.text().strip()
-        lang = self._lang_combo.currentData() or "zh-TW"
-
-        self._tag_btn.setEnabled(False)
-        self._meta_btn.setEnabled(False)
-        self._progress.show()
-        self._progress.setValue(0)
-        self._report_edit.clear()
-
-        self._doc.begin_op("自動無障礙標記")
-
-        self._worker = _AutoTagWorker(self._doc, title, lang, self)
-        self._worker.progress.connect(self._progress.setValue)
-        self._worker.finished.connect(self._on_finished)
-        self._worker.error.connect(self._on_error)
-        self._worker.start()
-
-    def _on_finished(self, stats: dict):
-        self._doc._mark_modified()
-        self._doc.end_op()
-
-        self._progress.hide()
-        self._tag_btn.setEnabled(True)
-        self._meta_btn.setEnabled(True)
-
-        report_lines = [
-            "=== 自動標記報告 ===",
-            f"總頁數：{stats['pages']}",
-            f"文字段落標記數：{stats['paragraphs']}",
-            f"圖片數量：{stats['images']}",
-            f"缺少替代文字的圖片：{stats['images_no_alt']}",
-        ]
-
-        if stats["images_no_alt"] > 0:
-            report_lines.append("")
-            report_lines.append(
-                "注意：部分圖片僅填入預設替代文字，建議手動補充描述。"
-            )
-
-        self._report_edit.setPlainText("\n".join(report_lines))
-        self._check_status()
-
-        QMessageBox.information(self, "完成", "自動標記已完成。")
-
-    def _on_error(self, msg: str):
+        from core.accessibility_engine import AccessibilityEngine
+        if not self._tag_btn.isEnabled(): return
+        alts = {int(self._image_alts.item(row,1).text()): self._image_alts.item(row,2).text() for row in range(self._image_alts.rowCount())}
         try:
-            self._doc.end_op()
-        except Exception:
-            pass
+            count = AccessibilityEngine().auto_tag(self._doc, self._title_edit.text(), self._lang_combo.currentData(), alts)
+            self._check_status()
+            QMessageBox.information(self, "內容標記完成", f"已建立 {count} 個內容關聯。請逐頁確認閱讀順序、標題層級與圖片描述。")
+        except Exception as exc: QMessageBox.warning(self, "標記未完成", str(exc))
 
-        self._progress.hide()
-        self._tag_btn.setEnabled(True)
-        self._meta_btn.setEnabled(True)
-        QMessageBox.critical(self, "錯誤", msg)
+    def _edit_tag(self, item, column):
+        from core.accessibility_engine import AccessibilityEngine
+        xref = item.data(0, Qt.ItemDataRole.UserRole); kind = item.text(0)
+        if kind == "Figure":
+            value, ok = QInputDialog.getMultiLineText(self, "圖片替代文字", "描述圖片的意義：", item.text(2))
+            if ok:
+                with self._doc.edit_transaction("修改替代文字"): AccessibilityEngine().set_alt_text(self._doc.fitz_doc, xref, value)
+                self._check_status()
+        elif kind in ("TD", "TH"):
+            value, ok = QInputDialog.getItem(self, "表格語意", "選擇表格儲存格角色：", ["資料儲存格", "欄表頭", "列表頭", "列與欄表頭"], 0, False)
+            if ok:
+                with self._doc.edit_transaction("修改表格表頭"):
+                    if value == "資料儲存格":
+                        self._doc.fitz_doc.xref_set_key(xref,"S","/TD");self._doc.fitz_doc.xref_set_key(xref,"A","null")
+                    else: AccessibilityEngine().set_table_header(self._doc.fitz_doc,xref,{"欄表頭":"Column","列表頭":"Row","列與欄表頭":"Both"}[value])
+                self._check_status()
+        elif kind == "P" or kind.startswith("H"):
+            value, ok = QInputDialog.getItem(self, "文字語意", "選擇段落或標題層級：", ["P", "H1", "H2", "H3", "H4", "H5", "H6"], 0, False)
+            if ok:
+                with self._doc.edit_transaction("修改文字標記"): AccessibilityEngine().set_heading_level(self._doc.fitz_doc, xref, int(value[1:]) if value != "P" else 0)
+                self._check_status()
+
+    def _move_section(self, delta):
+        from core.accessibility_engine import AccessibilityEngine
+        selected = self._structure.currentItem()
+        if selected is None: return
+        parent = selected.parent()
+        if parent is None: return
+        index = parent.indexOfChild(selected); target = index+delta
+        if not 0 <= target < parent.childCount(): return
+        order = list(range(parent.childCount())); order[index],order[target] = order[target],order[index]
+        try:
+            with self._doc.edit_transaction("調整閱讀順序"):
+                AccessibilityEngine().reorder_children(self._doc.fitz_doc,parent.data(0,Qt.ItemDataRole.UserRole),order)
+            self._check_status()
+        except Exception as exc: QMessageBox.warning(self,"無法重排",str(exc))
 
     def _update_metadata_only(self):
         """僅更新文件標題與語言，不做結構標記。"""
@@ -394,3 +274,45 @@ class AccessibilityDialog(QDialog):
 
         self._check_status()
         QMessageBox.information(self, "完成", "文件中繼資料已更新。")
+
+    def _export_ua(self):
+        if self.running_workers(): return
+        path, _ = QFileDialog.getSaveFileName(self, "匯出 PDF/UA-1", "accessible.pdf", "PDF (*.pdf)")
+        if not path: return
+        from core.pdf_standards import PDFStandards
+        from ui.widgets.operation_worker import OperationWorker
+        self._worker = OperationWorker(self._doc, lambda doc: PDFStandards(doc).export_pdfua(path), self)
+        self._ua_btn.setEnabled(False)
+        self._worker.succeeded.connect(lambda report: QMessageBox.information(self, "PDF/UA 機器驗證通過", "已通過 veraPDF PDF/UA-1 驗證並儲存。閱讀語意與替代文字適切性仍請人工確認。"))
+        self._worker.failed.connect(lambda message: QMessageBox.warning(self, "驗證未通過，沒有匯出", message))
+        self._worker.finished.connect(lambda: self._ua_btn.setEnabled(True))
+        self._worker.start()
+
+    def _create_table(self):
+        from core.accessibility_engine import AccessibilityEngine
+        selected = [item for item in self._structure.selectedItems() if item.text(0) == "P"]
+        if not selected:
+            QMessageBox.information(self,"選擇表格文字","請選取屬於同一表格的段落標記，可按住 Cmd/Ctrl 選取多個。")
+            return
+        pages = {int(item.text(1))-1 for item in selected}
+        if len(pages)!=1:
+            QMessageBox.warning(self,"表格範圍","請一次選取同一頁的表格文字。")
+            return
+        rows, ok = QInputDialog.getInt(self,"表格列数","表格有幾列？",2,1,1000)
+        if not ok: return
+        columns, ok = QInputDialog.getInt(self,"表格欄數","表格有幾欄？",2,1,1000)
+        if not ok: return
+        import re
+        bounds=None
+        for item in selected:
+            raw=self._doc.fitz_doc.xref_get_key(item.data(0,Qt.ItemDataRole.UserRole),"AcroBBox")[1]
+            values=[float(n) for n in re.findall(r'-?\d+(?:\.\d+)?',raw)]
+            if len(values)!=4: continue
+            rect=fitz.Rect(values);bounds=rect if bounds is None else bounds|rect
+        if bounds is None: return
+        try:
+            with self._doc.edit_transaction("建立表格標記"):
+                AccessibilityEngine().add_table_structure(self._doc.fitz_doc,pages.pop(),bounds+(-1,-1,1,1),rows,columns)
+            self._check_status()
+            QMessageBox.information(self,"表格標記完成","請雙擊儲存格標記設定列／欄表頭，並審閱每個儲存格的內容及閱讀順序。")
+        except Exception as exc: QMessageBox.warning(self,"表格標記未完成",str(exc))

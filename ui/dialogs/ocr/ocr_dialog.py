@@ -8,7 +8,10 @@ from PyQt6.QtCore import Qt
 from core.ocr_engine import OCREngine
 
 
-class OCRDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class OCRDialog(WorkerDialog):
     def __init__(self, doc, current_page: int = 0, parent=None):
         super().__init__(parent)
         self._doc = doc
@@ -141,7 +144,9 @@ class OCRDialog(QDialog):
             return range(frm, min(to, self._doc.page_count))
 
     def _run_ocr(self):
-        if not self._doc.path:
+        if self.running_workers():
+            return
+        if self._doc.fitz_doc is None:
             QMessageBox.warning(self, "提示", "請先儲存文件後再執行 OCR")
             return
 
@@ -186,7 +191,7 @@ class OCRDialog(QDialog):
             self._run_btn.setEnabled(True)
             QMessageBox.critical(self, "OCR 失敗", f"錯誤：{msg}")
 
-        OCREngine.run_async(
+        self._job = OCREngine.run_async(
             self._doc, out_path, lang, dpi,
             page_range=page_range,
             on_progress=on_progress,

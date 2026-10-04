@@ -29,7 +29,7 @@ class OptimizeDialog(QDialog):
         self._chk_img.setChecked(True)
         self._chk_font = QCheckBox("子集化字型")
         self._chk_font.setChecked(True)
-        self._chk_meta = QCheckBox("移除隱藏資料（中繼資料／縮圖）")
+        self._chk_meta = QCheckBox("移除中繼資料與縮圖（中繼資料／縮圖）")
         self._chk_linearize = QCheckBox("線性化（網頁最佳化）")
         form.addRow(self._chk_img)
         form.addRow(self._chk_font)

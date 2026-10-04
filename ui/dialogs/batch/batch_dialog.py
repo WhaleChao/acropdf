@@ -28,11 +28,15 @@ class _BatchWorker(QThread):
         results = engine.batch_process(
             self._files, self._operation, self._params,
             progress_callback=self.progress.emit,
+            is_cancelled=self.isInterruptionRequested,
         )
         self.finished.emit(results)
 
 
-class BatchDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class BatchDialog(WorkerDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("批次處理")
@@ -90,7 +94,7 @@ class BatchDialog(QDialog):
         self._stacked = QStackedWidget()
         self._stacked.addWidget(self._build_empty_panel())     # ocr
         self._stacked.addWidget(self._build_empty_panel())     # optimize
-        self._stacked.addWidget(self._build_empty_panel())     # encrypt
+        self._stacked.addWidget(self._build_encrypt_panel())   # encrypt
         self._stacked.addWidget(self._build_empty_panel())     # png
         self._stacked.addWidget(self._build_empty_panel())     # txt
         self._stacked.addWidget(self._build_empty_panel())     # merge
@@ -132,6 +136,17 @@ class BatchDialog(QDialog):
     def _build_empty_panel(self) -> QWidget:
         w = QWidget()
         return w
+
+    def _build_encrypt_panel(self):
+        widget = QWidget()
+        form = QFormLayout(widget)
+        self._encrypt_owner = QLineEdit()
+        self._encrypt_owner.setEchoMode(QLineEdit.EchoMode.Password)
+        self._encrypt_user = QLineEdit()
+        self._encrypt_user.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow('擁有者密碼（必填）：', self._encrypt_owner)
+        form.addRow('開啟密碼：', self._encrypt_user)
+        return widget
 
     def _build_watermark_panel(self) -> QWidget:
         w = QWidget()
@@ -209,6 +224,8 @@ class BatchDialog(QDialog):
             self._out_dir.setText(d)
 
     def _run(self):
+        if self.running_workers():
+            return
         if not self._files:
             QMessageBox.warning(self, "錯誤", "請先加入 PDF 檔案")
             return
@@ -219,21 +236,14 @@ class BatchDialog(QDialog):
         op_label = self._op_combo.currentText()
         op_key = self._OP_MAP.get(op_label, "optimize")
 
-        # 舊路徑操作（非 BatchEngine）
-        if op_key in ("ocr", "optimize", "encrypt", "png", "txt", "merge", "redact"):
-            self._run_legacy(op_label)
-            return
-
-        # BatchEngine 操作
         params = self._collect_params(op_key)
-        # 輸出到同目錄下
-        files_in_outdir = []
-        for p in self._files:
-            name = os.path.splitext(os.path.basename(p))[0]
-            out = os.path.join(self._outdir_path, os.path.basename(p))
-            import shutil
-            shutil.copy2(p, out)
-            files_in_outdir.append(out)
+        params['output_dir'] = self._outdir_path
+        if op_key == 'encrypt':
+            params.update(owner_password=self._encrypt_owner.text(), user_password=self._encrypt_user.text())
+            if not params['owner_password']:
+                QMessageBox.warning(self, '密碼未設定', '請指定擁有者密碼，再執行批次加密。')
+                return
+        files_in_outdir = list(self._files)
 
         self._progress.setMaximum(len(files_in_outdir))
         self._worker = _BatchWorker(files_in_outdir, op_key, params, self)
@@ -279,98 +289,3 @@ class BatchDialog(QDialog):
         else:
             QMessageBox.information(self, "完成", f"批次處理完成（{total} 個檔案）")
         self.accept()
-
-    def _run_legacy(self, op: str):
-        total = len(self._files)
-        errors = []
-        self._progress.setMaximum(total)
-
-        if op == "合併為單一 PDF":
-            try:
-                self._batch_merge(self._files, self._outdir_path)
-                QMessageBox.information(self, "完成", "合併完成！")
-            except Exception as e:
-                QMessageBox.critical(self, "失敗", f"合併失敗：{e}")
-            self.accept()
-            return
-
-        for i, path in enumerate(self._files):
-            try:
-                self._batch_one(path, op, self._outdir_path)
-            except Exception as e:
-                errors.append(f"{os.path.basename(path)}: {e}")
-            self._progress.setValue(i + 1)
-
-        if errors:
-            QMessageBox.warning(
-                self, "部分失敗",
-                f"完成 {total - len(errors)}/{total}，失敗：\n" + "\n".join(errors[:5])
-            )
-        else:
-            QMessageBox.information(self, "完成", f"批次處理完成（{total} 個檔案）")
-        self.accept()
-
-    def _batch_one(self, path: str, op: str, outdir: str):
-        import fitz
-        name = os.path.splitext(os.path.basename(path))[0]
-
-        if op == "OCR 辨識":
-            out = os.path.join(outdir, name + "_ocr.pdf")
-            from core.ocr_engine import OCREngine
-            OCREngine.run_sync(path, out, lang="chi_tra+eng", dpi=300)
-
-        elif op == "最佳化壓縮":
-            out = os.path.join(outdir, name + "_opt.pdf")
-            doc = fitz.open(path)
-            doc.save(out, garbage=4, deflate=True, clean=True)
-            doc.close()
-
-        elif op == "加密保護":
-            out = os.path.join(outdir, name + "_enc.pdf")
-            doc = fitz.open(path)
-            perm = (fitz.PDF_PERM_PRINT | fitz.PDF_PERM_COPY)
-            doc.save(out, encryption=fitz.PDF_ENCRYPT_AES_256,
-                     owner_pw="owner123", user_pw="", permissions=perm,
-                     garbage=4)
-            doc.close()
-
-        elif op == "匯出為圖片 (PNG)":
-            doc = fitz.open(path)
-            for pi in range(doc.page_count):
-                pix = doc[pi].get_pixmap(dpi=150)
-                out = os.path.join(outdir, f"{name}_p{pi+1:04d}.png")
-                pix.save(out)
-            doc.close()
-
-        elif op == "匯出為文字 (TXT)":
-            out = os.path.join(outdir, name + ".txt")
-            doc = fitz.open(path)
-            with open(out, "w", encoding="utf-8") as f:
-                for pi in range(doc.page_count):
-                    f.write(doc[pi].get_text())
-            doc.close()
-
-        elif op == "塗黑並套用":
-            from core.redaction_engine import RedactionEngine
-            doc_obj_stub = type("_Stub", (), {
-                "fitz_doc": fitz.open(path),
-                "begin_op": lambda s, n: None,
-                "end_op": lambda s: None,
-                "_mark_modified": lambda s: None,
-            })()
-            engine = RedactionEngine(doc_obj_stub)
-            engine.apply_all()
-            out = os.path.join(outdir, name + "_redacted.pdf")
-            doc_obj_stub.fitz_doc.save(out, garbage=4, deflate=True)
-            doc_obj_stub.fitz_doc.close()
-
-    def _batch_merge(self, files: list, outdir: str):
-        import fitz
-        merged = fitz.open()
-        for path in files:
-            src = fitz.open(path)
-            merged.insert_pdf(src)
-            src.close()
-        out = os.path.join(outdir, "merged.pdf")
-        merged.save(out, garbage=4, deflate=True)
-        merged.close()

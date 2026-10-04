@@ -1,0 +1,21 @@
+# Reproducible direct dependencies verified on macOS arm64 / Python 3.14.
+PyQt6==6.11.0
+PyMuPDF==1.27.1
+pymupdf-fonts==1.0.5
+pikepdf==10.5.1
+pypdf==6.7.5
+pyhanko==0.34.1
+pyhanko-certvalidator==0.30.2
+openpyxl==3.1.5
+python-pptx==1.0.2
+python-docx==1.2.0
+pytesseract==0.3.13
+Pillow==12.1.1
+reportlab==4.4.10
+cryptography==46.0.5
+fonttools==4.66.1
+requests==2.32.5
+pyobjc-framework-Vision==12.1; sys_platform == "darwin"
+pyobjc-framework-Quartz==12.1; sys_platform == "darwin"
+PyInstaller==6.19.0
+pytest==9.0.3

@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QProgressBar, QGroupBox,
     QFormLayout, QMessageBox, QFileDialog, QComboBox,
-    QDialogButtonBox,
+    QDialogButtonBox, QLineEdit,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
@@ -18,60 +18,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 #  合規等級與 Output Intent 設定檔
 # ---------------------------------------------------------------------------
 
-COMPLIANCE_LEVELS = {
-    "PDF/X-1a:2003": {
-        "version": "PDF/X-1a:2003",
-        "gts_key": "GTS_PDFXVersion",
-        "gts_value": "(PDF/X-1a:2003)",
-        "conformance": "PDF/X-1a:2003",
-    },
-    "PDF/X-3:2003": {
-        "version": "PDF/X-3:2003",
-        "gts_key": "GTS_PDFXVersion",
-        "gts_value": "(PDF/X-3:2003)",
-        "conformance": "PDF/X-3:2003",
-    },
-    "PDF/X-4": {
-        "version": "PDF/X-4",
-        "gts_key": "GTS_PDFXVersion",
-        "gts_value": "(PDF/X-4)",
-        "conformance": "PDF/X-4",
-    },
-}
-
-OUTPUT_INTENTS = {
-    "U.S. Web Coated (SWOP) v2": {
-        "identifier": "CGATS TR 001",
-        "condition": "SWOP (Publication) printing in USA (Alarm i ng 2.0)",
-        "registry": "http://www.color.org",
-        "info": "U.S. Web Coated (SWOP) v2",
-    },
-    "GRACoL 2006 (ISO 12647-2:2004)": {
-        "identifier": "CGATS TR 006",
-        "condition": "GRACoL2006_Coated1v2",
-        "registry": "http://www.color.org",
-        "info": "GRACoL 2006 (ISO 12647-2:2004)",
-    },
-    "ISO Coated v2 (ECI)": {
-        "identifier": "ISO Coated v2",
-        "condition": "ISOcoated_v2_eci",
-        "registry": "http://www.color.org",
-        "info": "ISO Coated v2 (ECI)",
-    },
-    "Japan Color 2001 Coated": {
-        "identifier": "JC200103",
-        "condition": "JapanColor2001Coated",
-        "registry": "http://www.color.org",
-        "info": "Japan Color 2001 Coated",
-    },
-    "ISO Coated v2 300% (ECI)": {
-        "identifier": "ISO Coated v2 300",
-        "condition": "ISOcoated_v2_300_eci",
-        "registry": "http://www.color.org",
-        "info": "ISO Coated v2 300% (ECI)",
-    },
-}
-
+COMPLIANCE_LEVELS = {"PDF/X-1a:2001": "1", "PDF/X-3:2002": "3", "PDF/X-4": "4"}
 
 # ---------------------------------------------------------------------------
 #  背景執行緒：影像解析度檢查
@@ -91,6 +38,8 @@ class _ImageCheckWorker(QThread):
     def run(self):  # noqa: D401
         results = []
         for page_idx in range(self._page_count):
+            if self.isInterruptionRequested():
+                break
             pct = int(100 * page_idx / max(self._page_count, 1))
             self.progress.emit(pct)
 
@@ -141,7 +90,10 @@ class _ImageCheckWorker(QThread):
 #  對話框
 # ---------------------------------------------------------------------------
 
-class PDFXDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class PDFXDialog(WorkerDialog):
     """PDF/X 匯出對話框。"""
 
     def __init__(self, doc, parent=None):
@@ -166,10 +118,13 @@ class PDFXDialog(QDialog):
         self._level_combo.setCurrentIndex(2)  # 預設 PDF/X-4
         comply_form.addRow("合規等級：", self._level_combo)
 
-        self._intent_combo = QComboBox()
-        for key in OUTPUT_INTENTS:
-            self._intent_combo.addItem(key)
-        comply_form.addRow("輸出描述檔：", self._intent_combo)
+        self._icc_path = QLineEdit()
+        self._icc_path.setPlaceholderText("選擇印刷廠提供的 CMYK ICC 檔案")
+        icc_row = QHBoxLayout(); icc_row.addWidget(self._icc_path)
+        browse = QPushButton("選擇 ICC…"); browse.clicked.connect(self._browse_icc); icc_row.addWidget(browse)
+        comply_form.addRow("印刷描述檔：", icc_row)
+        notice = QLabel("ICC 必須符合實際印刷條件。轉換後檢查描述檔、頁面邊界、字型與渲染；交印前仍應使用印刷廠的 PDF/X 檢查設定。")
+        notice.setWordWrap(True); comply_form.addRow(notice)
 
         root.addWidget(comply_group)
 
@@ -237,7 +192,7 @@ class PDFXDialog(QDialog):
                 page = fitz_doc[page_idx]
                 images = page.get_images(full=True)
                 for img_info in images:
-                    cs_name = img_info[1] if len(img_info) > 1 else ""
+                    cs_name = img_info[5] if len(img_info) > 5 else ""
                     if cs_name:
                         color_spaces.add(cs_name)
         except Exception:
@@ -296,98 +251,28 @@ class PDFXDialog(QDialog):
 
     # -- 匯出 --
 
+    def _browse_icc(self):
+        path, _ = QFileDialog.getOpenFileName(self, "選擇 CMYK 描述檔", "", "ICC 描述檔 (*.icc *.icm)")
+        if path: self._icc_path.setText(path)
+
     def _export(self):
-        # 如果有低解析度影像，先警告
-        if self._image_results:
-            low = [r for r in self._image_results if 0 < r["dpi_x"] < 300]
-            if low:
-                reply = QMessageBox.question(
-                    self, "低解析度警告",
-                    f"文件中有 {len(low)} 張影像解析度低於 300 DPI。\n"
-                    "仍要繼續匯出嗎？",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                )
-                if reply != QMessageBox.StandardButton.Yes:
-                    return
-
-        path, _ = QFileDialog.getSaveFileName(
-            self, "匯出 PDF/X", "", "PDF 檔案 (*.pdf)"
-        )
-        if not path:
+        if self.running_workers(): return
+        if not self._icc_path.text().strip():
+            QMessageBox.warning(self, "需要印刷設定", "請先選擇印刷廠指定的 CMYK ICC 描述檔。")
             return
-
-        level_key = self._level_combo.currentText()
-        intent_key = self._intent_combo.currentText()
-        level_info = COMPLIANCE_LEVELS[level_key]
-        intent_info = OUTPUT_INTENTS[intent_key]
-
-        try:
-            fitz_doc = self._doc.fitz_doc
-
-            # --- 設定 GTS_PDFXVersion ---
-            cat_xref = fitz_doc.pdf_catalog()
-
-            fitz_doc.xref_set_key(
-                cat_xref,
-                level_info["gts_key"],
-                level_info["gts_value"],
-            )
-
-            # --- 建立 OutputIntent 字典 ---
-            oi_xref = fitz_doc.get_new_xref()
-            oi_dict = (
-                f"<< /Type /OutputIntent "
-                f"/S /GTS_PDFX "
-                f"/OutputConditionIdentifier ({intent_info['identifier']}) "
-                f"/OutputCondition ({intent_info['condition']}) "
-                f"/RegistryName ({intent_info['registry']}) "
-                f"/Info ({intent_info['info']}) "
-                f">>"
-            )
-            fitz_doc.update_object(oi_xref, oi_dict)
-
-            # --- 將 OutputIntent 加入 Catalog 的 /OutputIntents 陣列 ---
-            existing_intents = fitz_doc.xref_get_key(cat_xref, "OutputIntents")
-            if existing_intents[0] == "null" or existing_intents[1] == "null":
-                fitz_doc.xref_set_key(
-                    cat_xref,
-                    "OutputIntents",
-                    f"[{oi_xref} 0 R]",
-                )
-            else:
-                # 附加到現有陣列
-                arr = existing_intents[1].strip()
-                if arr.startswith("[") and arr.endswith("]"):
-                    inner = arr[1:-1].strip()
-                    fitz_doc.xref_set_key(
-                        cat_xref,
-                        "OutputIntents",
-                        f"[{inner} {oi_xref} 0 R]",
-                    )
-                else:
-                    fitz_doc.xref_set_key(
-                        cat_xref,
-                        "OutputIntents",
-                        f"[{oi_xref} 0 R]",
-                    )
-
-            # --- 設定 PDF 中繼資料 ---
-            meta = fitz_doc.metadata or {}
-            meta["trapped"] = "False"
-            fitz_doc.set_metadata(meta)
-
-            # --- 儲存 ---
-            fitz_doc.save(
-                path,
-                garbage=3,
-                deflate=True,
-                clean=True,
-            )
-
-            QMessageBox.information(
-                self, "完成",
-                f"已匯出 {level_key} 格式至\n{path}",
-            )
-
-        except Exception as exc:
-            QMessageBox.critical(self, "匯出失敗", str(exc))
+        allow = False
+        if self._doc.is_encrypted:
+            allow = QMessageBox.question(self, "輸出未加密副本", "PDF/X 不允許加密，是否輸出未加密副本？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+            if not allow: return
+        path, _ = QFileDialog.getSaveFileName(self, "匯出 PDF/X", str(Path(self._doc.source_path or str(Path.home()/"Documents/document.pdf")).with_name("print-ready.pdf")), "PDF (*.pdf)")
+        if not path: return
+        from ui.widgets.operation_worker import OperationWorker
+        from core.pdf_standards import PDFStandards
+        # The worker owns an authenticated private snapshot; no cross-thread live document access.
+        icc = self._icc_path.text(); level = COMPLIANCE_LEVELS[self._level_combo.currentText()]
+        self._worker = OperationWorker(self._doc, lambda doc: PDFStandards(doc).export_pdfx(path, icc, level, allow), self)
+        self._export_btn.setEnabled(False)
+        self._worker.succeeded.connect(lambda report: QMessageBox.information(self, "轉換完成", f"已儲存 {report['level']}：\n{path}\nICC、字型、頁面邊界及渲染檢查通過。"))
+        self._worker.failed.connect(lambda message: QMessageBox.critical(self, "轉換失敗", message))
+        self._worker.finished.connect(lambda: self._export_btn.setEnabled(True))
+        self._worker.start()

@@ -72,6 +72,8 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
         "--add-data", f"{BASE / 'app'}:app",
         "--add-data", f"{BASE / 'rendering'}:rendering",
         "--add-data", f"{BASE / 'acro_platform'}:acro_platform",
+        "--add-data", f"{BASE / 'docs'}:docs",
+        "--add-data", f"{BASE / 'LICENSE'}:.",
         # ── PyMuPDF / PyQt6 ──────────────────────────────────
         "--hidden-import", "fitz",
         "--hidden-import", "fitz.utils",
@@ -160,6 +162,11 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
         run(sign_cmd)
         run(["codesign", "--verify", "--deep", "--strict", str(app_path)])
         print("✅  程式碼簽署完成")
+    else:
+        # Info.plist was changed after PyInstaller's signing step. Seal the final local bundle.
+        run(["codesign", "--deep", "--force", "--sign", "-", str(app_path)])
+        run(["codesign", "--verify", "--deep", "--strict", str(app_path)])
+        print("✅  本機 ad-hoc 簽署完成（非 Developer ID，未 notarize）")
 
     # ── 建立 DMG（選用，需要 create-dmg 或 hdiutil）────────
     _make_dmg(app_path)

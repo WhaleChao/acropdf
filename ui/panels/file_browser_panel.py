@@ -143,7 +143,7 @@ class FileBrowserPanel(QWidget):
         self._root_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
-        self._root_label.setStyleSheet("font-size: 11px; color: #888;")
+        self._root_label.setProperty("role", "muted")
         top.addWidget(self._root_label)
 
         btn_refresh = QToolButton()

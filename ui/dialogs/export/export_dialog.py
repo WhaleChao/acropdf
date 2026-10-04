@@ -74,7 +74,10 @@ def _safe_filename(name: str) -> str:
     return cleaned or "匯出檔案"
 
 
-class ExportDialog(QDialog):
+from ui.widgets.worker_dialog import WorkerDialog
+
+
+class ExportDialog(WorkerDialog):
     FORMAT_FILTERS = {
         "docx": "Word 文件 (*.docx)",
         "xlsx": "Excel 試算表 (*.xlsx)",
@@ -122,10 +125,24 @@ class ExportDialog(QDialog):
 
         from ui.dialogs._button_helper import make_ok_cancel_row
         row, ok_btn, cancel_btn = make_ok_cancel_row(self, ok_text="匯出", cancel_text="取消")
+        self._export_btn = ok_btn
         ok_btn.clicked.connect(self._export)
         cancel_btn.clicked.connect(self.reject)
         layout.addLayout(row)
 
+        info = {
+            "docx": "以文字與字級為主，複雜版面、表格與圖片可能無法完整保留。",
+            "xlsx": "表格轉為儲存格；未偵測到表格的頁面會保留文字。",
+            "pptx": "每頁轉為等比例圖片，投影片內文字無法直接編輯。",
+            "png": "每頁一張圖片，以選擇的檔名加上 _p001、_p002… 儲存。",
+            "jpg": "每頁一張图片，以選擇的檔名加上頁碼儲存。",
+            "tiff": "每頁一張 TIFF，以選擇的檔名加上頁碼儲存。",
+            "pdf/a": "转為 PDF/A-2b，通過 veraPDF 獨立驗證後儲存。需 Ghostscript 與 Java。",
+            "pdfa": "轉為 PDF/A-2b，加入 ICC 與嵌入字型；通過 veraPDF 獨立驗證後才會儲存。需 Ghostscript 與 Java。",
+        }.get(self._fmt, "")
+        if info:
+            notice = QLabel(info); notice.setWordWrap(True); notice.setProperty("role", "muted")
+            layout.addWidget(notice)
         self._save_path = None
 
     def _browse(self):
@@ -137,14 +154,31 @@ class ExportDialog(QDialog):
             self._out_path.setText(self._save_path)
 
     def _export(self):
+        if self.running_workers(): return
         if not self._save_path:
             QMessageBox.warning(self, "錯誤", "請先選擇儲存路徑")
             return
-        try:
-            dpi = getattr(self, "_dpi", None)
-            dpi_val = dpi.value() if dpi else 150
-            self._doc.exports.export(self._save_path, self._fmt, dpi=dpi_val)
-            QMessageBox.information(self, "完成", f"已匯出至\n{self._save_path}")
-            self.accept()
-        except Exception as e:
-            QMessageBox.critical(self, "匯出失敗", str(e))
+        allow = False
+        if self._fmt in ("pdfa", "pdf/a") and self._doc.is_encrypted:
+            allow = QMessageBox.question(self, "PDF/A 不支援加密", "轉換會輸出未加密的 PDF/A 副本。是否繼續？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+            if not allow: return
+        from ui.widgets.operation_worker import OperationWorker
+        from core.pdf_standards import PDFStandards
+        path = self._save_path; fmt = self._fmt
+        dpi = self._dpi.value() if hasattr(self, "_dpi") else 150
+        def operation(doc):
+            if fmt in ("pdfa", "pdf/a"):
+                PDFStandards(doc).export_pdfa(path, allow_decryption=allow)
+                return path
+            return doc.exports.export(path, fmt, dpi=dpi)
+        self._worker = OperationWorker(self._doc, operation, self)
+        self._export_btn.setEnabled(False)
+        self._worker.succeeded.connect(self._export_complete)
+        self._worker.failed.connect(lambda message: QMessageBox.critical(self, "匯出失敗", message))
+        self._worker.finished.connect(lambda: self._export_btn.setEnabled(True))
+        self._worker.start()
+
+    def _export_complete(self, result):
+        details = "\n".join(result) if isinstance(result, list) else str(result)
+        QMessageBox.information(self, "完成", f"已匯出至\n{details}")
+        self.accept()

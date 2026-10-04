@@ -39,7 +39,10 @@ class FontManager:
                 xref = f[0]
                 ftype = f[2] or "Type1"
                 name = f[3] or f[4] or f"font_{xref}"
-                embedded = xref > 0
+                try:
+                    embedded = xref > 0 and bool(doc.extract_font(xref)[3])
+                except Exception:
+                    embedded = False
                 subset = "+" in name
                 if name not in seen:
                     seen[name] = FontInfo(
@@ -56,28 +59,69 @@ class FontManager:
 
     def embed_font(self, font_name: str, font_path: str):
         """嵌入外部字型檔案到 PDF（替換非嵌入字型）"""
+        import math
+        import uuid
         doc = self._fitz
         if doc is None:
-            return
-        self._doc.begin_op("嵌入字型")
-        # 使用 pymupdf 字型機制插入
-        try:
-            with open(font_path, "rb") as fp:
-                font_data = fp.read()
-            doc.add_font(font_name, font_path)
-        except Exception as e:
-            print(f"[FontManager] embed_font error: {e}")
-        self._doc.end_op()
-        self._doc._mark_modified()
+            raise ValueError("尚未載入文件。")
+        font = fitz.Font(fontfile=font_path)
+        normalize = lambda name: name.split("+")[-1].replace(" ", "").lower()
+        edits = []
+        for page in doc:
+            matches = []
+            all_spans = []
+            for block in page.get_text("dict")["blocks"]:
+                for line in block.get("lines", []):
+                    angle = round(math.degrees(math.atan2(-line["dir"][1], line["dir"][0]))) % 360
+                    for span in line["spans"]:
+                        all_spans.append(span)
+                        if normalize(span["font"]) != normalize(font_name):
+                            continue
+                        if angle not in (0, 90, 180, 270):
+                            raise ValueError("斜向文字需先在文字編輯工具調整；原文件保留。")
+                        missing = [char for char in span["text"] if not char.isspace() and not font.has_glyph(ord(char))]
+                        if missing:
+                            raise ValueError("此字型缺少文件所需字元：" + "".join(dict.fromkeys(missing))[:30])
+                        matches.append((span, angle))
+            if matches:
+                selected = {id(span) for span, _ in matches}
+                for span, _ in matches:
+                    if any(id(other) not in selected and fitz.Rect(other['bbox']).intersects(fitz.Rect(span['bbox'])) for other in all_spans):
+                        raise ValueError('所選字型與其他文字重疊，請先調整版面，避免移除相鄰文字。')
+                if any(a.type[0] == fitz.PDF_ANNOT_REDACT for a in page.annots() or ()):
+                    raise ValueError("此頁有待套用的塗黑標記，請先處理再替換字型。")
+                edits.append((page.number, matches))
+        if not edits:
+            raise ValueError("找不到使用此字型的文字。")
+        alias = "acro_font_" + uuid.uuid4().hex[:8]
+        with self._doc.edit_transaction("替換並嵌入字型"):
+            for page_num, matches in edits:
+                page = doc[page_num]
+                for span, _ in matches:
+                    page.add_redact_annot(fitz.Rect(span["bbox"]), fill=False)
+                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE)
+                page.insert_font(fontname=alias, fontfile=font_path)
+                for span, angle in matches:
+                    rect = fitz.Rect(span["bbox"])
+                    extent = rect.width if angle in (0, 180) else rect.height
+                    length = font.text_length(span["text"], fontsize=span["size"])
+                    size = min(span["size"], span["size"] * extent / length) if length else span["size"]
+                    color = tuple(((span["color"] >> shift) & 255) / 255 for shift in (16, 8, 0))
+                    page.insert_text(span["origin"], span["text"], fontsize=size, fontname=alias, color=color, rotate=angle)
+                    # Preserve exact Unicode when multiple code points share a glyph,
+                    # such as ordinary space and NBSP in an embedded font's cmap.
+                    stream = page.get_contents()[-1]
+                    payload = doc.xref_stream(stream)
+                    actual = fitz.get_pdf_str(span['text']).encode('ascii')
+                    doc.update_stream(stream, b'/Span << /ActualText ' + actual + b' >> BDC\n' + payload + b'\nEMC')
+                page.clean_contents()
 
     def subset_font(self, font_name: str):
         """子集化嵌入字型（僅保留使用到的字符）"""
-        try:
-            import fontTools.subset as ft_subset
-        except ImportError:
-            raise RuntimeError("請先安裝 fonttools")
-        # 實際子集化需要提取 → subset → 重新嵌入，這裡做佔位實作
-        self._doc._mark_modified()
+        if not any(font.name == font_name for font in self.list_fonts()):
+            raise ValueError("找不到指定字型。")
+        with self._doc.edit_transaction("文件字型子集化"):
+            self._fitz.subset_fonts()
 
     def replace_font(self, old_name: str, new_path: str):
         """替換字型"""

@@ -43,9 +43,18 @@ class AnnotationManager:
         if self._fitz is None:
             raise RuntimeError("尚未載入文件")
         self._doc.begin_op("攤平標注")
-        indices = page_indices if page_indices else range(self._fitz.page_count)
-        for i in indices:
-            self._page(i).clean_contents()
+        indices = page_indices if page_indices is not None else range(self._fitz.page_count)
+        toc = self._fitz.get_toc()
+        for i in sorted(set(indices)):
+            if not 0 <= i < self._fitz.page_count:
+                continue
+            with fitz.open() as baked:
+                baked.insert_pdf(self._fitz, from_page=i, to_page=i)
+                baked.bake(annots=True, widgets=False)
+                self._fitz.insert_pdf(baked, start_at=i)
+                self._fitz.delete_page(i + 1)
+        if toc:
+            self._fitz.set_toc(toc)
         self._doc.end_op()
         self._doc._mark_modified()
 
@@ -64,7 +73,20 @@ class AnnotationManager:
 
     def add_area_highlight(self, page_num: int, rect: fitz.Rect,
                            color: tuple = (1, 1, 0), opacity: float = 0.35):
-        """文字選取尚未實作前，先用半透明區塊提供高亮標記。"""
+        """Highlight actual text quads intersecting a selection; use an area for images."""
+        page = self._page(page_num)
+        quads = []
+        for block in page.get_text('rawdict')['blocks']:
+            for line in block.get('lines', []):
+                for span in line['spans']:
+                    for char in span.get('chars', []):
+                        box = fitz.Rect(char['bbox'])
+                        if box.is_empty or char['c'].isspace(): continue
+                        overlap = box & rect
+                        if overlap.get_area() >= box.get_area() * .5:
+                            quads.append(fitz.recover_char_quad(line['dir'], span, char))
+        if quads:
+            return self.add_highlight(page_num, quads, color, opacity)
         self._doc.begin_op("區塊高亮")
         page = self._page(page_num)
         annot = page.add_rect_annot(rect)
@@ -269,10 +291,11 @@ class AnnotationManager:
     ]
 
     def add_stamp(self, page_num: int, rect: fitz.Rect, stamp_name: str = "Draft"):
-        self._doc.begin_op("加圖章")
+        stamp = getattr(fitz, 'STAMP_' + stamp_name, None)
+        if stamp is None: raise ValueError('未知的內建圖章。')
         page = self._page(page_num)
-        annot = page.add_stamp_annot(rect, stamp=self.BUILTIN_STAMPS.index(stamp_name)
-                                     if stamp_name in self.BUILTIN_STAMPS else 7)
+        self._doc.begin_op("加圖章")
+        annot = page.add_stamp_annot(rect, stamp=stamp)
         annot.update()
         self._doc.end_op()
         self._doc._mark_modified()
@@ -292,26 +315,13 @@ class AnnotationManager:
         """永久執行塗黑"""
         if not self._fitz:
             return
-        self._doc.begin_op("執行塗黑")
-        indices = page_indices if page_indices else range(self._fitz.page_count)
-        for i in indices:
-            page = self._page(i)
-            if page is None:
-                continue
-            page.apply_redactions()
-        self._doc.end_op()
-        self._doc._mark_modified()
+        return self._doc.redaction.apply_all(page_indices)
 
     # ── 匯入/匯出 XFDF ───────────────────────────────────────────
     def export_xfdf(self, output_path: str):
-        xfdf = self._fitz.get_xfdf() if hasattr(self._fitz, 'get_xfdf') else ""
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(xfdf)
+        from core.xfdf import export_annotations
+        return export_annotations(self._doc, output_path)
 
     def import_xfdf(self, xfdf_path: str):
-        with open(xfdf_path, encoding="utf-8") as f:
-            content = f.read()
-        # PyMuPDF 1.24+ 支援
-        if hasattr(self._fitz, 'set_xfdf'):
-            self._fitz.set_xfdf(content)
-            self._doc._mark_modified()
+        from core.xfdf import import_annotations
+        return import_annotations(self._doc, xfdf_path)

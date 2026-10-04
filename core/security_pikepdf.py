@@ -5,37 +5,43 @@ from __future__ import annotations
 class PikePDFSecurity:
 
     def set_permissions_advanced(self, input_path: str, output_path: str,
-                                 permissions: dict):
+                                 permissions: dict, owner_pw: str = "", user_pw: str = "", input_password: str = ""):
         """精細權限控制
         permissions keys: print, print_hq, modify, copy, annotate,
                           fill_forms, assemble, extract
         """
         import pikepdf
-        pdf = pikepdf.open(input_path)
+        if not owner_pw:
+            raise ValueError("請指定擁有者密碼。")
+        pdf = pikepdf.open(input_path, password=input_password)
         allow = pikepdf.Permissions(
             print_lowres=permissions.get("print", True),
             print_highres=permissions.get("print_hq", False),
             modify_other=permissions.get("modify", False),
             extract=permissions.get("copy", False),
             modify_annotation=permissions.get("annotate", True),
-            fill_forms=permissions.get("fill_forms", True),
-            assemble=permissions.get("assemble", False),
+            modify_form=permissions.get("fill_forms", True),
+            modify_assembly=permissions.get("assemble", False),
             accessibility=permissions.get("extract", True),
         )
         enc = pikepdf.Encryption(
-            owner="owner_password",
-            user="",
+            owner=owner_pw,
+            user=user_pw,
             allow=allow,
         )
-        pdf.save(output_path, encryption=enc)
-        pdf.close()
+        from core.file_io import atomic_output
+        try:
+            with atomic_output(output_path, source=input_path) as temporary:
+                pdf.save(temporary, encryption=enc)
+        finally:
+            pdf.close()
 
     def inspect_encryption(self, path: str, password: str = "") -> dict:
         """檢查加密狀態：演算法、金鑰長度、權限明細"""
         import pikepdf
         try:
             pdf = pikepdf.open(path, password=password)
-            enc_info = pdf.encryption
+            enc_info = pdf.encryption if pdf.is_encrypted else None
             result = {
                 "encrypted": enc_info is not None,
                 "algorithm": "",
@@ -74,10 +80,9 @@ class PikePDFSecurity:
             return {"encrypted": False, "error": str(e)}
 
     def encrypt_with_aes256(self, input_path: str, output_path: str,
-                            user_pw: str = "", owner_pw: str = "owner",
+                            user_pw: str = "", owner_pw: str = "",
                             permissions: dict | None = None):
         """AES-256 加密快捷方法"""
-        self.set_permissions_advanced.__func__(
-            self, input_path, output_path,
-            permissions or {"print": True, "copy": True}
-        )
+        self.set_permissions_advanced(input_path, output_path,
+                                      permissions or {"print": True, "copy": True},
+                                      owner_pw=owner_pw, user_pw=user_pw)

@@ -22,7 +22,8 @@ class Config:
 
     @property
     def recent_files(self) -> list[str]:
-        return self._settings.value("recent_files", []) or []
+        value = self._settings.value("recent_files", []) or []
+        return value if isinstance(value, list) else [value] if isinstance(value, str) else []
 
     def add_recent_file(self, path: str):
         files = self.recent_files
@@ -36,7 +37,10 @@ class Config:
     @property
     def layout_mode(self) -> LayoutMode:
         v = self._settings.value("layout_mode", int(LayoutMode.CONTINUOUS))
-        return LayoutMode(int(v))
+        try:
+            return LayoutMode(int(v))
+        except (ValueError, TypeError):
+            return LayoutMode.CONTINUOUS
 
     @layout_mode.setter
     def layout_mode(self, mode: LayoutMode):
@@ -44,10 +48,13 @@ class Config:
 
     @property
     def theme(self) -> str:
-        return self._settings.value("theme", "light") or "light"
+        value = self._settings.value("theme", "system")
+        return value if value in ("system", "light", "dark") else "system"
 
     @theme.setter
     def theme(self, t: str):
+        if t not in ("system", "light", "dark"):
+            raise ValueError("不支援的主題")
         self._settings.setValue("theme", t)
         self._settings.sync()
 

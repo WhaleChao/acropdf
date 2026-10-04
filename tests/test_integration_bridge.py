@@ -58,4 +58,4 @@ def test_main_status_cli_does_not_start_qt():
     )
     value = json.loads(result.stdout)
     assert value["ok"] is True
-    assert value["app_version"] == "1.0.18"
+    assert value["app_version"] == "1.1.0"
