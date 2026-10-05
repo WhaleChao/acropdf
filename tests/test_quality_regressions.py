@@ -751,3 +751,29 @@ def test_accessibility_auto_tag_cannot_rewrite_existing_structure(qapp, sample_p
     assert doc.fitz_doc.xref_get_key(doc.fitz_doc.pdf_catalog(), 'StructTreeRoot')[1] == f'{root} 0 R'
     assert not doc.can_undo()
     dialog.close(); doc.close()
+
+
+@pytest.mark.parametrize('operation', ['fit_page', 'set_zoom', 'refresh', 'double_layout'])
+def test_rebuild_preserves_last_page_and_visible_scroll(window, sample_pdf, qapp, operation):
+    from app.constants import LayoutMode
+    window.open_file(str(sample_pdf)); qapp.processEvents()
+    view = window._current_view(); last = view._doc.page_count - 1
+    view.go_to_page(last); qapp.processEvents()
+    assert view.current_page() == last
+    if operation == 'set_zoom': view.set_zoom(.9)
+    elif operation == 'double_layout': view.set_layout_mode(LayoutMode.DOUBLE)
+    else: getattr(view, operation)()
+    qapp.processEvents(); qapp.processEvents()
+    assert view.current_page() == last
+    assert window._page_spin.value() == last + 1
+    widget = next(page for page in view._page_widgets if page.page_num == last)
+    top = widget.mapTo(view.viewport(), widget.rect().topLeft()).y()
+    assert top < view.viewport().height() and top + widget.height() > 0
+
+
+def test_pending_rebuild_restore_does_not_override_new_navigation(window, sample_pdf, qapp):
+    window.open_file(str(sample_pdf)); qapp.processEvents()
+    view = window._current_view(); view.go_to_page(1); qapp.processEvents()
+    view.set_zoom(.9); view.go_to_page(view._doc.page_count - 1)
+    qapp.processEvents(); qapp.processEvents()
+    assert view.current_page() == view._doc.page_count - 1

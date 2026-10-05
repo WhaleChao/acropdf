@@ -90,6 +90,7 @@ class PDFView(QScrollArea):
         doc.document_saved.connect(self._on_document_saved)
 
     def _rebuild_pages(self):
+        self._rebuilding_pages = True
         # 遞增世代，使進行中的背景渲染結果自動失效
         self._render_gen += 1
         self._rendering_keys.clear()
@@ -104,6 +105,7 @@ class PDFView(QScrollArea):
         self._row_containers.clear()
 
         if not self._doc or not self._doc.fitz_doc:
+            self._rebuilding_pages = False
             return
 
         # 夾住 _current_page，防止刪頁後越界
@@ -118,8 +120,15 @@ class PDFView(QScrollArea):
         elif self._layout_mode == LayoutMode.DOUBLE:
             self._build_double()
 
-        # 強制容器更新大小
+        # New child widgets otherwise wait until the next event loop to become
+        # visible. Their layout positions must exist before restoring the page.
+        for row in self._row_containers:
+            row.show()
+        for page in self._page_widgets:
+            page.show()
+        self._container_layout.activate()
         self._container.adjustSize()
+        self._rebuilding_pages = False
 
         # 非同步渲染可見頁面
         QTimer.singleShot(0, self._render_visible_pages)
@@ -262,6 +271,8 @@ class PDFView(QScrollArea):
             pass
 
     def _on_scroll(self, value: int):
+        if getattr(self, '_rebuilding_pages', False):
+            return
         if self._layout_mode == LayoutMode.SINGLE:
             # 單頁模式不需要根據捲動更新頁碼
             self._render_visible_pages()
@@ -272,7 +283,12 @@ class PDFView(QScrollArea):
         viewport_center = value + self.viewport().height() // 2
         best = self._current_page
         best_dist = float('inf')
-        for pw in self._page_widgets:
+        pages = self._page_widgets
+        if self._layout_mode == LayoutMode.DOUBLE:
+            # Both pages share a row. Preserve the selected side while that row
+            # remains centered, rather than always selecting its left page.
+            pages = sorted(pages, key=lambda page: page.page_num != self._current_page)
+        for pw in pages:
             i = pw.page_num
             pw_top = pw.mapTo(self._container, pw.rect().topLeft()).y()
             pw_bot = pw_top + pw.height()
