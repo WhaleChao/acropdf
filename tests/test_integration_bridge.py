@@ -58,4 +58,24 @@ def test_main_status_cli_does_not_start_qt():
     )
     value = json.loads(result.stdout)
     assert value["ok"] is True
-    assert value["app_version"] == "1.1.3"
+    assert value["app_version"] == "1.1.4"
+
+
+def test_windowed_exe_contract_writes_utf8_report_without_stdout(tmp_path, monkeypatch):
+    from core.integration_bridge import dispatch_integration_cli
+    monkeypatch.setattr(sys, "stdout", None)
+    output = tmp_path / "報告.json"
+    assert dispatch_integration_cli(["--integration-status", "--integration-output", str(output)], "1.1.4") == 0
+    assert json.loads(output.read_text(encoding="utf-8"))["app_version"] == "1.1.4"
+
+
+def test_windowed_exe_contract_reports_invalid_pdf(tmp_path):
+    from core.integration_bridge import dispatch_integration_cli
+    output = tmp_path / "error.json"
+    assert dispatch_integration_cli(["--integration-live-test", str(tmp_path / "missing.pdf"), "--integration-output", str(output)], "1.1.4") == 1
+    assert json.loads(output.read_text(encoding="utf-8"))["ok"] is False
+
+
+def test_windowed_exe_contract_fails_on_unwritable_output(tmp_path):
+    from core.integration_bridge import dispatch_integration_cli
+    assert dispatch_integration_cli(["--integration-status", "--integration-output", str(tmp_path)], "1.1.4") == 1

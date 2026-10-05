@@ -2,6 +2,11 @@ name: Build Windows
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release to receive verified packages
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -46,40 +51,38 @@ jobs:
         shell: pwsh
         run: python build_win.py --skip-preflight
 
-      - name: Verify package
+      - name: Verify portable EXE, installed EXE and GUI startup
         shell: pwsh
-        run: |
-          if (!(Test-Path dist/AcroPDF/AcroPDF.exe)) {
-            throw "Missing dist/AcroPDF/AcroPDF.exe"
-          }
-          if (!(Test-Path dist/AcroPDF_win.zip)) {
-            throw "Missing dist/AcroPDF_win.zip"
-          }
-          if (!(Test-Path dist/AcroPDF_Setup.exe)) {
-            throw "Missing dist/AcroPDF_Setup.exe"
-          }
-          Get-ChildItem dist | Format-Table Name, Length
+        run: python scripts/verify_windows_package.py
 
       - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag == ''
         uses: actions/upload-artifact@v4
         with:
           name: AcroPDF-Windows
+          retention-days: 3
           path: |
             dist/AcroPDF_win.zip
             dist/AcroPDF_win.zip.sha256
             dist/AcroPDF_Setup.exe
             dist/AcroPDF_Setup.exe.sha256
+            dist/windows-package-validation.json
           if-no-files-found: error
 
-      - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload verified packages to draft release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          $tag = "${{ github.ref_name }}"
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo $env:GITHUB_REPOSITORY --title "AcroPDF $tag" --notes "AcroPDF release package."
+          $release = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft,tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$release.isDraft) {
+            throw "Create a draft release before uploading validated packages."
           }
-          gh release upload $tag dist/AcroPDF_win.zip dist/AcroPDF_win.zip.sha256 dist/AcroPDF_Setup.exe dist/AcroPDF_Setup.exe.sha256 --repo $env:GITHUB_REPOSITORY --clobber
+          $tag = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq .sha
+          if ($LASTEXITCODE -ne 0 -or $tag -ne "${{ github.sha }}") {
+            throw "Release tag must match the verified source commit."
+          }
+          gh release upload $env:RELEASE_TAG dist/AcroPDF_win.zip dist/AcroPDF_win.zip.sha256 dist/AcroPDF_Setup.exe dist/AcroPDF_Setup.exe.sha256 dist/windows-package-validation.json --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Release upload failed." }

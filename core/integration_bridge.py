@@ -188,8 +188,12 @@ def live_validate_pdf(path: str | Path, app_version: str = "unknown") -> dict[st
     }
 
 
-def _emit(value: dict[str, Any]) -> None:
-    print(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+def _emit(value: dict[str, Any], output: str | None = None) -> None:
+    payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if output:
+        Path(output).write_text(payload + "\n", encoding="utf-8")
+    else:
+        print(payload)
 
 
 def dispatch_integration_cli(argv: list[str], app_version: str) -> int | None:
@@ -206,15 +210,19 @@ def dispatch_integration_cli(argv: list[str], app_version: str) -> int | None:
     group.add_argument("--integration-status", action="store_true")
     group.add_argument("--integration-inspect", metavar="PDF")
     group.add_argument("--integration-live-test", metavar="PDF")
+    parser.add_argument("--integration-output", metavar="JSON", help="將報告寫入檔案，供無主控台的 Windows EXE 使用")
+    args = parser.parse_args(argv)
     try:
-        args = parser.parse_args(argv)
         if args.integration_status:
-            _emit(integration_status(app_version))
+            _emit(integration_status(app_version), args.integration_output)
         elif args.integration_inspect:
-            _emit(inspect_pdf(args.integration_inspect, app_version))
+            _emit(inspect_pdf(args.integration_inspect, app_version), args.integration_output)
         else:
-            _emit(live_validate_pdf(args.integration_live_test, app_version))
+            _emit(live_validate_pdf(args.integration_live_test, app_version), args.integration_output)
         return 0
     except Exception as exc:
-        _emit({"ok": False, "error": str(exc), "protocol_version": PROTOCOL_VERSION})
+        try:
+            _emit({"ok": False, "error": str(exc), "protocol_version": PROTOCOL_VERSION}, args.integration_output)
+        except OSError:
+            pass
         return 1

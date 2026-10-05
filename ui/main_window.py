@@ -359,9 +359,6 @@ class MainWindow(QMainWindow):
         from PyQt6.QtWidgets import QSizePolicy
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         header.addWidget(spacer)
-        badge = QLabel("文件處理在本機"); badge.setObjectName("localBadge")
-        badge.setToolTip("PDF 編輯在本機執行；AI 功能會另行說明資料傳送")
-        header.addWidget(badge)
         command = QPushButton("搜尋指令   ⌘ / Ctrl K"); command.setObjectName("commandButton")
         command.clicked.connect(self._show_command_palette); header.addWidget(command)
         self._icon_targets.append((command, "search"))
@@ -1370,7 +1367,7 @@ class MainWindow(QMainWindow):
             self._welcome_panel.refresh_recent()
             self._workspace_stack.setCurrentWidget(self._welcome_panel)
             self._welcome_panel._open.setFocus()
-            self._page_label.setText("準備就緒 · 本機 PDF 工作區")
+            self._page_label.setText("準備就緒")
 
     def _set_side_page(self, index: int):
         if 0 <= index < self._side_stack.count():

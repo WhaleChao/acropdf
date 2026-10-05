@@ -1,4 +1,4 @@
-# AcroPDF 1.1.3 本機品質審查
+# AcroPDF 1.1.4 本機品質審查
 
 日期：2026-10-05。原始碼重新 clone 至桌面，改善保留在 `quality/desktop-studio` 分支。
 
@@ -40,7 +40,7 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 
 新增 34 項輸出與回歸檢查，覆蓋多行／旋轉標注、文字容量及草稿保留、逐位置 DPI／內嵌影像、表格選取與混合內容保護、向量列印／份數／紙張／表單／非列印旗標、取消／故障、來源硬連結、列印權限、背景工作關閉與 RGB／透明度；新增排他發佈、競爭建立目的檔／符號連結與無硬連結環境下的列印、圖片匯出及單檔／批次分割檢查。
 
-1.1.3 是本輪建置候選版；安裝結果以交付的 candidate-validation.json 與 installation-validation.json 為準。先前版本安裝時，使用者已解鎖 Mac 並關閉舊程序；已實機開啟測試 PDF、切換夜間主題、搜尋並執行指令。1.1.1 已實機完成指定 1、3、6 頁兩份的向量列印；1.1.2 另修正末頁縮放／重新整理及雙頁切換的位置保留。最終安裝版驗證見交付紀錄。
+1.1.4 是本輪建置候選版；安裝結果以交付的 candidate-validation.json 與 installation-validation.json 為準。先前版本安裝時，使用者已解鎖 Mac 並關閉舊程序；已實機開啟測試 PDF、切換夜間主題、搜尋並執行指令。1.1.1 已實機完成指定 1、3、6 頁兩份的向量列印；1.1.2 另修正末頁縮放／重新整理及雙頁切換的位置保留。最終安裝版驗證見交付紀錄。
 
 ## 1.1.3 標籤列調整
 
@@ -48,7 +48,7 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 
 ## 已執行驗證
 
-- 原始 103 項測試；本次完整測試 **276 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
+- 原始 103 項測試；本次完整測試 **279 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
 - pip check、compileall、git diff --check；實际字型／加密／輸出／故障回復檢查。
 - PDF/A 三個等級由 veraPDF 1.30.2 驗證；PDF/UA-1 實際帶內容標記及嵌入字型文件通過 veraPDF。
 - PDF/X 三等級實際 ICC、邊界、嵌入字型、頁數、渲染檢查；没有獨立 PDF/X 認證。
@@ -89,3 +89,9 @@ python build_mac.py --skip-preflight
 實作參考：https://pymupdf.readthedocs.io/en/latest/page.html 、https://pymupdf.readthedocs.io/en/latest/document.html 、https://doc.qt.io/qt-6/qprinter.html 。
 
 標準參考：https://docs.verapdf.org/cli/validation/ 、https://ghostscript.readthedocs.io/en/gs10.07.0/VectorDevices.html 、https://pdfa.org/wp-content/uploads/2024/02/Well-Tagged-PDF-WTPDF-1.0.pdf 。授權來源與 notices 見 THIRD_PARTY.md。
+
+## 1.1.4 介面與發佈修正
+
+依使用者要求移除頂端「文件處理在本機」、歡迎插畫 LOCAL 徽章與狀態列本機字樣。保留會實際傳送文件內容的 AI 功能說明。
+
+Windows 無主控台 EXE 新增 --integration-output JSON 報告出口；驗證包含封裝 EXE 版本／渲染／往返、錯誤退出碼、校驗碼、靜默安裝、已安裝 EXE 檢查、GUI 載入示範 PDF、來源保留及解除安裝。Windows 發佈須先通過檢查，再上傳至指定來源 commit 的草稿 Release；避開舊 workflow 的 artifact 額度阻擋。macOS DMG 建置、封裝源碼與校驗碼同樣核對。正式簽章、公證、實體列印與輔助閱讀等外部條件未取得驗收證據，發佈為預覽版，不宣稱已達完整商用或獲獎認證。

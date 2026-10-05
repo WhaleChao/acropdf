@@ -36,10 +36,7 @@ class DocumentArtwork(QWidget):
             p.setPen(QPen(QColor(c["border"]), 3)); p.drawLine(16, y, 16 + width, y)
         p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(c["tint"]))
         p.drawRoundedRect(QRectF(14, 83, 65, 7), 2, 2); p.restore()
-        p.setBrush(QColor(c["accent"])); p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(QRectF(112, 123, 63, 33), 10, 10)
-        p.setPen(QColor(c["bg"])); p.setFont(QFont("Helvetica Neue", 10, QFont.Weight.Bold))
-        p.drawText(QRectF(112, 123, 63, 33), Qt.AlignmentFlag.AlignCenter, "LOCAL")
+
 
 
 class WelcomePanel(QScrollArea):

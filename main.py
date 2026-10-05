@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.1.4"
 APP_PUBLISHER = "WhaleChao"
 
 # OpenDesk 整合命令必須在載入 Qt 前執行，才能用於快速健康檢查與無介面 LIVE 驗證。

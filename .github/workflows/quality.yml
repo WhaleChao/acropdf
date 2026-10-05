@@ -30,8 +30,10 @@ jobs:
       - run: python -m pytest -q
       - run: python scripts/quality_review.py --output work/quality-review
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: failure()
+        continue-on-error: true
         with:
           name: quality-${{ matrix.os }}-${{ matrix.python }}
+          retention-days: 3
           path: work/quality-review/
           if-no-files-found: ignore
