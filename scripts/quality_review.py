@@ -52,6 +52,15 @@ for theme in ['light','dark']:
  w._switch_theme(theme);app.processEvents();w.grab().save(str(base/f'AcroPDF-document-{theme}.png'))
 dlg=DocumentPropertiesDialog(w._current_doc(),w);dlg.show();app.processEvents();dlg.grab().save(str(base/'AcroPDF-dialog-dark.png'));dlg.close()
 palette=CommandPalette(w,[('開啟文件','open pdf',w.open_file_dialog,True),('匯出 Word','docx export',lambda:None,True),('OCR 文字辨識','scan',lambda:None,True),('永久塗黑','redact',lambda:None,True),('夜間模式','dark theme',lambda:None,True)]);palette.show();app.processEvents();palette.grab().save(str(base/'AcroPDF-commands.png'));palette.close()
+from ui.dialogs.print_dialog import PrintDialog
+from ui.dialogs.text_box.text_box_dialog import TextBoxDialog
+for theme in ('light', 'dark'):
+ w._switch_theme(theme)
+ printing=PrintDialog(12,0,w);printing.show();app.processEvents()
+ printing.grab().save(str(base/f'AcroPDF-print-{theme}.png'));printing.close()
+ textbox=TextBoxDialog(parent=w,rect_info='選取範圍：300 × 50 pt（第 1 頁）')
+ textbox._text_edit.setPlainText('審閱意見：保留內容，讓每一次修改都清楚可見。')
+ textbox.show();app.processEvents();textbox.grab().save(str(base/f'AcroPDF-textbox-{theme}.png'));textbox.close()
 # Real event-loop regression: repeated rebuilds, not just method-return checks.
 view=w._current_view()
 for _ in range(12):

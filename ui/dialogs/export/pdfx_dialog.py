@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QFormLayout, QMessageBox, QFileDialog, QComboBox,
     QDialogButtonBox, QLineEdit,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt
 
 
 # ---------------------------------------------------------------------------
@@ -19,72 +19,6 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 # ---------------------------------------------------------------------------
 
 COMPLIANCE_LEVELS = {"PDF/X-1a:2001": "1", "PDF/X-3:2002": "3", "PDF/X-4": "4"}
-
-# ---------------------------------------------------------------------------
-#  背景執行緒：影像解析度檢查
-# ---------------------------------------------------------------------------
-
-class _ImageCheckWorker(QThread):
-    """掃描文件中的影像並檢查解析度。"""
-
-    finished = pyqtSignal(list)   # list of dicts: page, xref, width, height, dpi_x, dpi_y
-    progress = pyqtSignal(int)
-
-    def __init__(self, fitz_doc, page_count: int, parent=None):
-        super().__init__(parent)
-        self._fitz_doc = fitz_doc
-        self._page_count = page_count
-
-    def run(self):  # noqa: D401
-        results = []
-        for page_idx in range(self._page_count):
-            if self.isInterruptionRequested():
-                break
-            pct = int(100 * page_idx / max(self._page_count, 1))
-            self.progress.emit(pct)
-
-            page = self._fitz_doc[page_idx]
-            image_list = page.get_images(full=True)
-
-            for img_info in image_list:
-                xref = img_info[0]
-                try:
-                    img_dict = self._fitz_doc.extract_image(xref)
-                    if not img_dict:
-                        continue
-
-                    pix_w = img_dict.get("width", 0)
-                    pix_h = img_dict.get("height", 0)
-
-                    # 嘗試計算 DPI：pixel / (bbox size in inches)
-                    # 取得此影像在頁面上的呈現大小
-                    img_rects = page.get_image_rects(xref)
-                    if img_rects:
-                        rect = img_rects[0]
-                        # PDF 單位為 72 pt/inch
-                        display_w_in = rect.width / 72.0
-                        display_h_in = rect.height / 72.0
-
-                        dpi_x = int(pix_w / display_w_in) if display_w_in > 0 else 0
-                        dpi_y = int(pix_h / display_h_in) if display_h_in > 0 else 0
-                    else:
-                        dpi_x = 0
-                        dpi_y = 0
-
-                    results.append({
-                        "page": page_idx + 1,
-                        "xref": xref,
-                        "width": pix_w,
-                        "height": pix_h,
-                        "dpi_x": dpi_x,
-                        "dpi_y": dpi_y,
-                    })
-                except Exception:
-                    continue
-
-        self.progress.emit(100)
-        self.finished.emit(results)
-
 
 # ---------------------------------------------------------------------------
 #  對話框
@@ -99,7 +33,7 @@ class PDFXDialog(WorkerDialog):
     def __init__(self, doc, parent=None):
         super().__init__(parent)
         self._doc = doc
-        self._worker: Optional[_ImageCheckWorker] = None
+        self._worker = None
         self._image_results: list[dict] = []
         self.setWindowTitle("匯出 PDF/X")
         self.resize(580, 520)
@@ -207,7 +141,7 @@ class PDFXDialog(WorkerDialog):
     # -- 影像解析度檢查 --
 
     def _run_image_check(self):
-        if self._worker and self._worker.isRunning():
+        if self.running_workers():
             return
 
         self._check_btn.setEnabled(False)
@@ -215,12 +149,22 @@ class PDFXDialog(WorkerDialog):
         self._img_progress.setValue(0)
         self._img_report.clear()
 
-        self._worker = _ImageCheckWorker(
-            self._doc.fitz_doc, self._doc.page_count, self
+        from core.image_inspection import inspect_images
+        from ui.widgets.operation_worker import OperationWorker
+        self._worker = OperationWorker(
+            self._doc,
+            lambda doc: inspect_images(doc.fitz_doc, self._worker.isInterruptionRequested),
+            self,
         )
-        self._worker.progress.connect(self._img_progress.setValue)
-        self._worker.finished.connect(self._on_check_finished)
+        self._img_progress.setRange(0, 0)
+        self._worker.succeeded.connect(self._on_check_finished)
+        self._worker.failed.connect(self._on_check_failed)
+        self._worker.finished.connect(lambda: self._check_btn.setEnabled(True))
+        self._worker.finished.connect(self._img_progress.hide)
         self._worker.start()
+
+    def _on_check_failed(self, message):
+        self._img_report.setPlainText(f"影像檢查未完成：{message}")
 
     def _on_check_finished(self, results: list):
         self._image_results = results
@@ -231,9 +175,9 @@ class PDFXDialog(WorkerDialog):
             self._img_report.setPlainText("文件中未偵測到影像。")
             return
 
-        low_dpi = [r for r in results if r["dpi_x"] > 0 and r["dpi_x"] < 300]
+        low_dpi = [r for r in results if min(r["dpi_x"], r["dpi_y"]) < 300]
         lines = [
-            f"共掃描 {len(results)} 張影像。",
+            f"共掃描 {len(results)} 處影像呈現位置。",
         ]
 
         if low_dpi:
@@ -241,8 +185,8 @@ class PDFXDialog(WorkerDialog):
             lines.append("")
             for r in low_dpi:
                 lines.append(
-                    f"  第 {r['page']} 頁 — {r['width']}x{r['height']} px, "
-                    f"約 {r['dpi_x']}x{r['dpi_y']} DPI"
+                    f"  第 {r['page'] + 1} 頁 — {r['width']}x{r['height']} px, "
+                    f"約 {r['dpi_x']:.0f}×{r['dpi_y']:.0f} DPI"
                 )
         else:
             lines.append("所有影像解析度均達 300 DPI 以上。")

@@ -28,7 +28,11 @@ class CommandPalette(QDialog):
 
     def _move(self, delta):
         count = self._results.count()
-        if count: self._results.setCurrentRow((self._results.currentRow() + delta) % count)
+        for step in range(1, count + 1):
+            row = (self._results.currentRow() + delta * step) % count
+            if self._results.item(row).flags() & Qt.ItemFlag.ItemIsEnabled:
+                self._results.setCurrentRow(row)
+                break
 
     def _filter(self, query):
         self._results.clear()

@@ -1486,7 +1486,6 @@ class MainWindow(QMainWindow):
     # ── 列印 ──────────────────────────────────────────────────────
     def _print_document(self):
         from PyQt6.QtPrintSupport import QPrinter
-        from PyQt6.QtGui import QPainter, QImage
         from ui.dialogs.print_dialog import PrintDialog
         import fitz
 
@@ -1502,50 +1501,52 @@ class MainWindow(QMainWindow):
             return
         settings = dialog.settings()
 
+        if settings.output_pdf_path:
+            from ui.dialogs.print_progress_dialog import PrintProgressDialog
+            try:
+                progress = PrintProgressDialog(doc, settings, self)
+            except Exception as exc:
+                QMessageBox.warning(self, "列印未完成", str(exc))
+                return
+            progress.exec()
+            if progress.error:
+                QMessageBox.warning(self, "列印未完成", progress.error)
+            elif progress.report:
+                QMessageBox.information(self, "列印完成", f"PDF 已輸出至：\n{settings.output_pdf_path}")
+            return
+
+        from PyQt6.QtGui import QPageSize, QPageLayout
+        from PyQt6.QtCore import QSizeF
+        from PyQt6.QtWidgets import QProgressDialog
+        from core.print_engine import print_to_device, prepare_print_appearances
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setPrinterName(settings.printer_name)
         printer.setDocName(doc.display_name)
         printer.setCopyCount(settings.copies)
         printer.setDuplex(settings.duplex_mode)
-        if settings.output_pdf_path:
-            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-            printer.setOutputFileName(settings.output_pdf_path)
-        else:
-            printer.setPrinterName(settings.printer_name)
-
-        painter = QPainter()
-        if not painter.begin(printer):
-            QMessageBox.warning(self, "錯誤", "無法啟動列印")
-            return
-
-        fitz_doc = doc.fitz_doc
-        dpi = printer.resolution()
-
+        printer.setPageSize(QPageSize(QSizeF(*settings.paper_size), QPageSize.Unit.Point))
+        printer.setPageOrientation(QPageLayout.Orientation.Landscape if settings.landscape else QPageLayout.Orientation.Portrait)
+        progress = QProgressDialog("正在準備列印…", "取消", 0, len(settings.page_indices), self)
+        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
+        progress.setMinimumDuration(0)
+        private = None
         try:
-            for pos, page_index in enumerate(settings.page_indices):
+            private = fitz.open('pdf', doc._snapshot())
+            if private.needs_pass and not private.authenticate(doc._password):
+                raise ValueError('無法認證列印快照。')
+            prepare_print_appearances(private)
+            def update(value):
+                progress.setValue(value)
+                progress.setLabelText(f"已處理 {value} / {len(settings.page_indices)} 頁")
                 QApplication.processEvents()
-                if pos > 0:
-                    printer.newPage()
-                page = fitz_doc[page_index]
-                zoom = dpi / 72.0
-                mat = fitz.Matrix(zoom, zoom)
-                pix = page.get_pixmap(matrix=mat, alpha=False)
-                img = QImage(pix.samples_ptr, pix.width, pix.height,
-                             pix.stride, QImage.Format.Format_RGB888).copy()
-                target = printer.pageRect(QPrinter.Unit.DevicePixel)
-                scaled = img.scaled(
-                    int(target.width()), int(target.height()),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                x = int((target.width() - scaled.width()) / 2)
-                y = int((target.height() - scaled.height()) / 2)
-                painter.drawImage(x, y, scaled)
-        except Exception as e:
-            QMessageBox.warning(self, "列印錯誤", f"列印第 {page_index + 1} 頁時發生錯誤：{e}")
+            print_to_device(private, printer, settings.page_indices, progress.wasCanceled, update, doc._password)
+        except InterruptedError as exc:
+            QMessageBox.information(self, "列印已取消", str(exc))
+        except Exception as exc:
+            QMessageBox.warning(self, "列印未完成", str(exc))
         finally:
-            painter.end()
-        if settings.output_pdf_path:
-            QMessageBox.information(self, "列印完成", f"PDF 已輸出至：\n{settings.output_pdf_path}")
+            progress.close()
+            if private is not None: private.close()
 
     # ── 右鍵選單 ─────────────────────────────────────────────────
     def _thumb_context_action(self, action_id: str, indices: list[int]):

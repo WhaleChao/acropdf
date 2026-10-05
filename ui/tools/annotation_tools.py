@@ -279,12 +279,10 @@ class TextBoxTool(BaseTool):
         rect_info = (f"選取範圍：{pdf_rect.width:.0f} × {pdf_rect.height:.0f} pt"
                      f"  （第 {widget.page_num + 1} 頁）")
         from ui.dialogs.text_box.text_box_dialog import TextBoxDialog
-        dlg = TextBoxDialog(font_size=detected, rect_info=rect_info, parent=widget)
-        if dlg.exec():
-            text, size = dlg.get_result()
-            if text.strip():
-                self.doc.annotations.add_freetext(
-                    widget.page_num, pdf_rect, text.strip(), fontsize=float(size))
+        dlg = TextBoxDialog(font_size=detected, rect_info=rect_info, parent=widget,
+            inserter=lambda text, size: self.doc.annotations.add_freetext(
+                widget.page_num, pdf_rect, text, fontsize=float(size)))
+        dlg.exec()
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -325,10 +323,13 @@ class CalloutTool(BaseTool):
             self._start = None
             return
         detected = _detect_font_size(self.doc, widget.page_num, pdf_rect)
-        text, ok = QInputDialog.getMultiLineText(widget, "標注框", "內容：")
-        if ok and text.strip():
-            self.doc.annotations.add_callout(
-                widget.page_num, pdf_rect, text.strip(), fontsize=detected)
+        from ui.dialogs.text_box.text_box_dialog import TextBoxDialog
+        dialog = TextBoxDialog(font_size=detected, parent=widget,
+            rect_info=f"選取範圍：{pdf_rect.width:.0f} × {pdf_rect.height:.0f} pt",
+            inserter=lambda text, size: self.doc.annotations.add_callout(
+                widget.page_num, pdf_rect, text, fontsize=float(size)))
+        dialog.setWindowTitle("插入標注框")
+        dialog.exec()
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -396,7 +397,10 @@ class UnderlineTool(BaseTool):
         if rect_w.width() >= 5 and rect_w.height() >= 3:
             pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
             if pdf_rect is not None:
-                self.doc.annotations.add_area_underline(widget.page_num, pdf_rect)
+                try:
+                    self.doc.annotations.add_area_underline(widget.page_num, pdf_rect)
+                except ValueError as exc:
+                    QMessageBox.information(widget, "底線", str(exc))
         self._start = None
 
     def draw_overlay(self, widget, painter):
@@ -441,7 +445,10 @@ class StrikeoutTool(BaseTool):
         if rect_w.width() >= 5 and rect_w.height() >= 3:
             pdf_rect = self._pdf_rect(widget, rect_w.topLeft(), rect_w.bottomRight())
             if pdf_rect is not None:
-                self.doc.annotations.add_area_strikeout(widget.page_num, pdf_rect)
+                try:
+                    self.doc.annotations.add_area_strikeout(widget.page_num, pdf_rect)
+                except ValueError as exc:
+                    QMessageBox.information(widget, "刪除線", str(exc))
         self._start = None
 
     def draw_overlay(self, widget, painter):

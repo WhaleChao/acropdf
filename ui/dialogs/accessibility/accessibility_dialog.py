@@ -300,7 +300,8 @@ class AccessibilityDialog(WorkerDialog):
             return
         rows, ok = QInputDialog.getInt(self,"表格列数","表格有幾列？",2,1,1000)
         if not ok: return
-        columns, ok = QInputDialog.getInt(self,"表格欄數","表格有幾欄？",2,1,1000)
+        max_columns = min(1000, AccessibilityEngine.MAX_TABLE_CELLS // rows)
+        columns, ok = QInputDialog.getInt(self,"表格欄數","表格有幾欄？",min(2,max_columns),1,max_columns)
         if not ok: return
         import re
         bounds=None
@@ -312,7 +313,10 @@ class AccessibilityDialog(WorkerDialog):
         if bounds is None: return
         try:
             with self._doc.edit_transaction("建立表格標記"):
-                AccessibilityEngine().add_table_structure(self._doc.fitz_doc,pages.pop(),bounds+(-1,-1,1,1),rows,columns)
+                page_number = pages.pop()
+                table_bounds = (bounds+(-1,-1,1,1)) & self._doc.fitz_doc[page_number].rect
+                AccessibilityEngine().add_table_structure(self._doc.fitz_doc,page_number,table_bounds,rows,columns,
+                    selected_xrefs=[item.data(0,Qt.ItemDataRole.UserRole) for item in selected])
             self._check_status()
             QMessageBox.information(self,"表格標記完成","請雙擊儲存格標記設定列／欄表頭，並審閱每個儲存格的內容及閱讀順序。")
         except Exception as exc: QMessageBox.warning(self,"表格標記未完成",str(exc))

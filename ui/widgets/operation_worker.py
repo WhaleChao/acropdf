@@ -6,6 +6,7 @@ import fitz
 class OperationWorker(QThread):
     succeeded = pyqtSignal(object)
     failed = pyqtSignal(str)
+    progress = pyqtSignal(int)
 
     def __init__(self, document, operation, parent=None):
         super().__init__(parent)
@@ -28,9 +29,11 @@ class OperationWorker(QThread):
                 raise ValueError('無法認證文件快照。')
             if not self.isInterruptionRequested():
                 result = self._operation(document)
-                self.succeeded.emit(result)
+                if not self.isInterruptionRequested():
+                    self.succeeded.emit(result)
         except Exception as exc:
-            self.failed.emit(str(exc))
+            if not self.isInterruptionRequested():
+                self.failed.emit(str(exc))
         finally:
             document.close()
             self._snapshot = b''; self._password = ''

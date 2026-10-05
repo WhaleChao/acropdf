@@ -8,8 +8,12 @@ import tempfile
 @contextmanager
 def atomic_output(destination, *, source=None, overwrite=False):
     target = Path(destination).expanduser().absolute()
-    if source and os.path.realpath(source) == os.path.realpath(target):
-        raise ValueError("輸出不能覆寫目前的來源檔案。")
+    if source:
+        aliases = os.path.realpath(source) == os.path.realpath(target)
+        if not aliases and os.path.exists(source) and target.exists():
+            aliases = os.path.samefile(source, target)
+        if aliases:
+            raise ValueError("輸出不能覆寫目前的來源檔案。")
     if not target.parent.is_dir():
         raise FileNotFoundError(f"輸出資料夾不存在：{target.parent}")
     if target.exists() and not overwrite:

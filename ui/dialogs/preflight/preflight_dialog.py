@@ -6,24 +6,10 @@ from PyQt6.QtWidgets import (
     QPushButton, QComboBox, QTreeWidget, QTreeWidgetItem,
     QProgressBar, QMessageBox, QFileDialog,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from core.preflight_engine import PreflightEngine, PreflightReport
-
-
-class _PreflightWorker(QThread):
-    finished = pyqtSignal(object)
-
-    def __init__(self, fitz_doc, profile, parent=None):
-        super().__init__(parent)
-        self._doc = fitz_doc
-        self._profile = profile
-
-    def run(self):
-        engine = PreflightEngine()
-        report = engine.full_preflight(self._doc, self._profile)
-        self.finished.emit(report)
 
 
 from ui.widgets.worker_dialog import WorkerDialog

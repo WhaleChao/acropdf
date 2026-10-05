@@ -31,6 +31,9 @@ class PrintSettings:
     copies: int
     duplex_mode: QPrinter.DuplexMode = QPrinter.DuplexMode.DuplexLongSide
     output_pdf_path: str | None = None
+    paper_size: tuple[float, float] = (595.276, 841.89)
+    landscape: bool = False
+    overwrite: bool = False
 
 
 class PrintDialog(QDialog):
@@ -131,7 +134,21 @@ class PrintDialog(QDialog):
         duplex_form.addRow("列印方式：", self._duplex_combo)
         root.addWidget(duplex_group)
 
-        root.addWidget(QLabel("頁面會依比例置中並符合可列印範圍。"))
+        paper_group = QGroupBox("紙張與方向")
+        paper_form = QFormLayout(paper_group)
+        self._paper_combo = QComboBox()
+        self._paper_combo.addItem("A4（210 × 297 mm）", (595.276, 841.89))
+        self._paper_combo.addItem("A3（297 × 420 mm）", (841.89, 1190.551))
+        self._paper_combo.addItem("Letter（8.5 × 11 in）", (612., 792.))
+        self._paper_combo.addItem("Legal（8.5 × 14 in）", (612., 1008.))
+        self._orientation = QComboBox()
+        self._orientation.addItems(["直向", "橫向"])
+        paper_form.addRow("紙張：", self._paper_combo)
+        paper_form.addRow("方向：", self._orientation)
+        root.addWidget(paper_group)
+        notice = QLabel("頁面會依比例置中；PDF 列印副本保留向量內容，註解與表單會攤平。副本不保留原檔加密及數位簽章。")
+        notice.setWordWrap(True)
+        root.addWidget(notice)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -155,6 +172,9 @@ class PrintDialog(QDialog):
 
     def _accept_settings(self):
         output_pdf = self._pdf_edit.text().strip() if self._pdf_check.isChecked() else ""
+        if self._pdf_check.isChecked() and not output_pdf:
+            QMessageBox.warning(self, "無法列印", "請選擇 PDF 輸出位置。")
+            return
         printer_name = self._printer_combo.currentText().strip() if self._printer_combo.isEnabled() else ""
 
         if output_pdf:
@@ -174,12 +194,21 @@ class PrintDialog(QDialog):
             QMessageBox.warning(self, "頁面範圍錯誤", str(exc))
             return
 
+        overwrite = False
+        if output_pdf and Path(output_pdf).expanduser().exists():
+            overwrite = QMessageBox.question(self, "取代列印副本", f"此檔案已存在：\n{output_pdf}\n\n是否取代？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+            if not overwrite: return
         self._settings = PrintSettings(
             printer_name=printer_name,
             page_indices=pages,
             copies=self._copies.value(),
             duplex_mode=self._duplex_combo.currentData() or QPrinter.DuplexMode.DuplexLongSide,
             output_pdf_path=output_pdf or None,
+            paper_size=self._paper_combo.currentData(),
+            landscape=self._orientation.currentIndex() == 1,
+            overwrite=overwrite,
         )
         self.accept()
 

@@ -18,6 +18,21 @@ class StructNode:
 
 
 class AccessibilityEngine:
+    MAX_TABLE_CELLS = 10000
+
+    @staticmethod
+    def _structure_children(doc, parent_xref):
+        import re
+        kind, value = doc.xref_get_key(parent_xref, 'K')
+        if kind not in ('array', 'xref'):
+            raise ValueError('此結構沒有可重排的子標記。')
+        children = [int(n) for n in re.findall(r'(\d+)\s+0\s+R', value)]
+        residue = re.sub(r'\d+\s+0\s+R', '', value).strip('[] \t\r\n')
+        if residue or any(doc.xref_get_key(n, 'S')[0] != 'name' or
+                          doc.xref_get_key(n, 'Type')[1] not in ('null', '/StructElem')
+                          for n in children):
+            raise ValueError('此結構混合了內容標記，不能直接重排；原有內容保持不變。')
+        return children
 
     def get_structure_tree(self, doc: fitz.Document) -> Optional[StructNode]:
         import re
@@ -28,6 +43,8 @@ class AccessibilityEngine:
         def parse(xref, page=0):
             if xref in visited: return None
             visited.add(xref)
+            if doc.xref_get_key(xref, 'Type')[1] != '/StructTreeRoot' and doc.xref_get_key(xref, 'S')[0] != 'name':
+                return None
             tag = doc.xref_get_key(xref, "S")[1].lstrip("/")
             pg = doc.xref_get_key(xref, "Pg")
             if pg[0] == "xref": page = pages.get(int(pg[1].split()[0]), page)
@@ -70,18 +87,20 @@ class AccessibilityEngine:
         doc.xref_set_key(xref, 'A', f'<< /O /Table /Scope /{scope} >>')
 
     def reorder_children(self, doc, parent_xref, new_order):
-        import re
-        kind, value = doc.xref_get_key(parent_xref, 'K')
-        if kind != 'array': raise ValueError('此結構沒有可重排的子標記。')
-        children = [int(n) for n in re.findall(r'(\d+)\s+0\s+R', value)]
+        children = self._structure_children(doc, parent_xref)
         if sorted(new_order) != list(range(len(children))): raise ValueError('請提供完整且不重複的標記順序。')
         doc.xref_set_key(parent_xref, 'K', '['+' '.join(f'{children[i]} 0 R' for i in new_order)+']')
 
     def add_table_structure(self, doc: fitz.Document, page_num: int,
-                            table_rect: fitz.Rect, rows: int, cols: int):
+                            table_rect: fitz.Rect, rows: int, cols: int, selected_xrefs=None):
         """建立 Table/TR/TD 結構標記"""
-        if not 0 <= page_num < len(doc) or rows < 1 or cols < 1 or table_rect.is_empty:
+        if (not isinstance(rows, int) or not isinstance(cols, int)
+                or not 0 <= page_num < len(doc) or rows < 1 or cols < 1
+                or table_rect.is_empty or table_rect.is_infinite
+                or not doc[page_num].rect.contains(table_rect)):
             raise ValueError("表格範圍、頁碼及列欄數必須有效。")
+        if rows * cols > self.MAX_TABLE_CELLS:
+            raise ValueError(f"表格最多可建立 {self.MAX_TABLE_CELLS:,} 個儲存格，請分段處理。")
         tree = self.get_structure_tree(doc)
         if tree is None: raise ValueError("請先建立內容標記。")
         nodes = []
@@ -90,11 +109,21 @@ class AccessibilityEngine:
                 nodes.append(node)
             for child in node.children: visit(child)
         visit(tree)
+        if selected_xrefs is not None:
+            chosen = set(selected_xrefs)
+            nodes = [node for node in nodes if node.xref in chosen]
+            if {node.xref for node in nodes} != chosen:
+                raise ValueError('選取項目須為表格範圍內的同頁段落標記。')
         if not nodes: raise ValueError("表格範圍內沒有已關聯的文字標記。")
         from core.content_tags import _new, _ref
         parents = {doc.xref_get_key(node.xref, "P")[1] for node in nodes}
         if len(parents) != 1: raise ValueError("表格內容跨不同結構區段，請先調整閱讀區段。")
         parent = int(parents.pop().split()[0]); page_xref = doc[page_num].xref
+        old = self._structure_children(doc, parent)
+        selected = {node.xref for node in nodes}
+        positions = [i for i, xref in enumerate(old) if xref in selected]
+        if len(positions) != len(nodes) or positions != list(range(positions[0], positions[-1]+1)):
+            raise ValueError('表格段落在閱讀順序中必須相鄰，請先調整順序，避免移動其他內容。')
         cells = {(r,c): [] for r in range(rows) for c in range(cols)}
         for node in nodes:
             rect = fitz.Rect(node.rect)
@@ -112,9 +141,7 @@ class AccessibilityEngine:
                 for n in cells[r,c]: doc.xref_set_key(n,"P",_ref(cell))
             doc.xref_set_key(tr,"K","["+" ".join(_ref(n) for n in cell_nodes)+"]")
         doc.xref_set_key(table,"K","["+" ".join(_ref(n) for n in row_nodes)+"]")
-        import re
-        old = [int(n) for n in re.findall(r'(\d+)\s+0\s+R', doc.xref_get_key(parent,"K")[1])]
-        selected = {node.xref for node in nodes}; result = []; inserted = False
+        result = []; inserted = False
         for xref in old:
             if xref in selected:
                 if not inserted: result.append(table); inserted=True
@@ -193,6 +220,7 @@ class AccessibilityEngine:
         tree = self.get_structure_tree(doc)
         if tree is None: raise ValueError("文件沒有結構樹。")
         container = tree.children[0] if len(tree.children) == 1 and tree.children[0].type == "Document" else tree
-        if sorted(new_order) != list(range(len(container.children))):
+        children = self._structure_children(doc, container.xref)
+        if sorted(new_order) != list(range(len(children))):
             raise ValueError("閱讀順序須完整包含所有區段，且不能重複。")
-        doc.xref_set_key(container.xref, "K", "[" + " ".join(f"{container.children[i].xref} 0 R" for i in new_order) + "]")
+        doc.xref_set_key(container.xref, "K", "[" + " ".join(f"{children[i]} 0 R" for i in new_order) + "]")

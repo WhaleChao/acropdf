@@ -51,7 +51,7 @@ class PreflightEngine:
 
     def check_fonts(self, doc: fitz.Document) -> list[dict]:
         """檢查每個字型：名稱、類型、嵌入狀態、子集狀態"""
-        seen: dict[str, dict] = {}
+        seen: dict[tuple, dict] = {}
         for i in range(doc.page_count):
             page = doc[i]
             for f in page.get_fonts(full=True):
@@ -59,8 +59,9 @@ class PreflightEngine:
                 xref = f[0]
                 font_type = f[2]
                 name = f[3] or f[4] or f"font_{xref}"
-                if name not in seen:
-                    seen[name] = {
+                key = (xref, name)
+                if key not in seen:
+                    seen[key] = {
                         "name": name,
                         "type": font_type,
                         "embedded": xref > 0 and bool(doc.extract_font(xref)[3]),
@@ -68,52 +69,22 @@ class PreflightEngine:
                         "pages": [],
                         "xref": xref,
                     }
-                if i not in seen[name]["pages"]:
-                    seen[name]["pages"].append(i)
+                if i not in seen[key]["pages"]:
+                    seen[key]["pages"].append(i)
         return list(seen.values())
 
     def check_images(self, doc: fitz.Document) -> list[dict]:
         """檢查每張圖片：DPI、色彩空間、壓縮方式"""
-        results = []
-        for i in range(doc.page_count):
-            page = doc[i]
-            for img in page.get_images(full=True):
-                xref = img[0]
-                try:
-                    info = doc.extract_image(xref)
-                    w = info.get("width", 0)
-                    h = info.get("height", 0)
-                    cs = info.get("colorspace", 0)
-                    placements = page.get_image_rects(xref)
-                    valid = [rect for rect in placements if rect.width > 0 and rect.height > 0]
-                    dpi = min((round(min(w / rect.width, h / rect.height) * 72) for rect in valid), default=0)
-                    cs_name = _cs_name(cs)
-                    results.append({
-                        "page": i,
-                        "xref": xref,
-                        "width": w,
-                        "height": h,
-                        "dpi": dpi,
-                        "colorspace": cs_name,
-                        "ext": info.get("ext", ""),
-                    })
-                except Exception:
-                    pass
+        from core.image_inspection import inspect_images
+        results = inspect_images(doc)
+        for image in results:
+            image['ext'] = doc.extract_image(image['xref']).get('ext', '') if image['xref'] else ''
         return results
 
     def check_color_spaces(self, doc: fitz.Document) -> list[str]:
         """偵測每頁使用的色彩空間（RGB/CMYK/Spot）"""
-        spaces: set[str] = set()
-        for i in range(doc.page_count):
-            page = doc[i]
-            for img in page.get_images(full=True):
-                try:
-                    info = doc.extract_image(img[0])
-                    cs = info.get("colorspace", 0)
-                    spaces.add(_cs_name(cs))
-                except Exception:
-                    pass
-        return list(spaces)
+        from core.color_inspection import painted_color_spaces
+        return sorted(set().union(*painted_color_spaces(doc)))
 
     def check_transparency(self, doc: fitz.Document) -> list[int]:
         """Report painted opacity below 1 and image soft masks, avoiding opacity=1 false positives."""
@@ -122,7 +93,9 @@ class PreflightEngine:
             page = doc[i]
             transparent = any(img[1] > 0 for img in page.get_images(full=True))
             transparent |= any(item.get('opacity', 1) < 1 for item in page.get_texttrace())
-            transparent |= any(item.get('fill_opacity', 1) < 1 or item.get('stroke_opacity', 1) < 1 for item in page.get_drawings())
+            transparent |= any(any(value is not None and value < 1
+                                   for value in (item.get('fill_opacity'), item.get('stroke_opacity')))
+                               for item in page.get_drawings())
             if transparent:
                 pages_with_transparency.append(i)
         return pages_with_transparency
@@ -180,9 +153,12 @@ class PreflightEngine:
                     message=f"圖片 DPI={dpi} 高於 Web 建議值 {max_dpi}（可降低）",
                     auto_fixable=True,
                 ))
-            if cfg.get("no_rgb") and img.get("colorspace") == "RGB":
+        if cfg.get("no_rgb"):
+            from core.color_inspection import painted_color_spaces
+            for page_number, spaces in enumerate(painted_color_spaces(doc)):
+                if 'RGB' not in spaces: continue
                 report.issues.append(PreflightIssue(
-                    severity="error", category="色彩", page=img["page"],
+                    severity="error", category="色彩", page=page_number,
                     message="RGB 色彩空間不符合 PDF/X-1a 要求",
                 ))
 
