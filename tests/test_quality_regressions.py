@@ -344,6 +344,7 @@ def test_chinese_header_positions_margin_and_page_tokens(sample_pdf):
 def test_exports_do_not_silently_claim_pdfa(sample_pdf,tmp_path,monkeypatch):
     doc=opened(sample_pdf)
     path=tmp_path/'archive.pdf'
+    monkeypatch.setattr('core.pdf_standards.find_executable', lambda kind: 'unused-ghostscript')
     monkeypatch.setattr('core.pdf_standards.validator_command', lambda: (_ for _ in ()).throw(RuntimeError('PDF/A validator missing')))
     with pytest.raises(RuntimeError,match='PDF/A'): doc.exports.export(str(path),'pdfa')
     assert not path.exists()

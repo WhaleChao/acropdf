@@ -45,7 +45,7 @@ jobs:
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q
+        run: python -c "import subprocess,sys; sys.exit(subprocess.run([sys.executable, '-m', 'pytest', '-vv', '-o', 'faulthandler_timeout=60'], timeout=180).returncode)"
 
       - name: Build Windows package
         shell: pwsh
