@@ -76,9 +76,10 @@ def test_failed_atomic_save_preserves_original(sample_pdf, monkeypatch):
 
 def test_save_preserves_destination_permissions(sample_pdf):
     sample_pdf.chmod(0o640)
+    expected_mode = sample_pdf.stat().st_mode & 0o777
     doc = opened(sample_pdf); doc.pages.rotate([0], 90)
     assert doc.save()
-    assert sample_pdf.stat().st_mode & 0o777 == 0o640
+    assert sample_pdf.stat().st_mode & 0o777 == expected_mode
     doc.close()
 
 
@@ -453,7 +454,8 @@ def test_recovery_retains_encryption_and_private_permissions(encrypted,tmp_path)
     store=RecoveryStore(tmp_path/'private'); doc=PDFDocument(); assert doc.open(str(encrypted),'user')
     doc.pages.rotate([0],90); store.capture(doc); entry=store.entries()[0]
     snapshot=store.directory/entry['file']
-    assert snapshot.stat().st_mode & 0o777==0o600
+    if os.name != 'nt':
+        assert snapshot.stat().st_mode & 0o777==0o600
     with fitz.open(snapshot) as check: assert check.needs_pass
     assert store.restore(entry) is None
     restored=store.restore(entry,password='user'); assert restored.fitz_doc[0].rotation==90
@@ -778,3 +780,20 @@ def test_pending_rebuild_restore_does_not_override_new_navigation(window, sample
     view.set_zoom(.9); view.go_to_page(view._doc.page_count - 1)
     qapp.processEvents(); qapp.processEvents()
     assert view.current_page() == view._doc.page_count - 1
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows DACL verification')
+def test_windows_recovery_acl_excludes_other_users(sample_pdf, tmp_path):
+    import json, subprocess
+    from core.recovery import RecoveryStore
+    store = RecoveryStore(tmp_path / 'private-recovery')
+    doc = opened(sample_pdf);doc.pages.rotate([0],90);store.capture(doc)
+    entry = store.entries()[0]
+    folder = str(store.directory).replace("'", "''")
+    snapshot = str(store.directory / entry['file']).replace("'", "''")
+    command = "$d=Get-Acl -LiteralPath '" + folder + "';$f=Get-Acl -LiteralPath '" + snapshot + "';@{protected=$d.AreAccessRulesProtected;sids=@($f.Access | ForEach-Object {$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value})}|ConvertTo-Json -Compress"
+    result = json.loads(subprocess.check_output(['powershell','-NoProfile','-Command',command],text=True))
+    assert result['protected']
+    assert not {'S-1-1-0', 'S-1-5-11', 'S-1-5-32-545'} & set(result['sids'])
+    assert len(set(result['sids'])) == 3
+    doc.close()

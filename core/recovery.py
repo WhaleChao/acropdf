@@ -11,13 +11,55 @@ from pathlib import Path
 from PyQt6.QtCore import QStandardPaths
 
 
+def _secure_windows_directory(path):
+    """Protect the recovery DACL on Python versions where mkdir mode is ignored."""
+    import ctypes
+    from ctypes import wintypes
+    import re
+    import subprocess
+    identity = subprocess.run(['whoami', '/user', '/fo', 'csv', '/nh'],
+                              capture_output=True, check=True, timeout=10,
+                              creationflags=subprocess.CREATE_NO_WINDOW)
+    match = re.search(rb'"(S-\d+(?:-\d+)+)"', identity.stdout)
+    if not match:
+        raise OSError('無法取得恢復資料夾的使用者身分。')
+    sid = match[1].decode('ascii')
+    descriptor_text = f'D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+    api = ctypes.WinDLL('advapi32', use_last_error=True)
+    convert = api.ConvertStringSecurityDescriptorToSecurityDescriptorW
+    convert.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(wintypes.DWORD)]
+    convert.restype = wintypes.BOOL
+    set_security = api.SetFileSecurityW
+    set_security.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p]
+    set_security.restype = wintypes.BOOL
+    descriptor = ctypes.c_void_p()
+    if not convert(descriptor_text, 1, ctypes.byref(descriptor), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
+    try:
+        if not set_security(str(path.resolve()), 0x80000004, descriptor):
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel.LocalFree(descriptor)
+
+
 class RecoveryStore:
     def __init__(self, directory=None):
         default = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)) / "recovery"
         self.directory = Path(directory or os.environ.get("ACROPDF_RECOVERY_DIR") or default)
+        self._directory_secured = False
 
     def _write(self, path, data):
+        existed = self.directory.is_dir()
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if not self._directory_secured or not existed:
+            if os.name == 'nt':
+                _secure_windows_directory(self.directory)
+            else:
+                self.directory.chmod(0o700)
+            self._directory_secured = True
         fd, temporary = tempfile.mkstemp(prefix=".writing_", dir=self.directory)
         try:
             with os.fdopen(fd, "wb") as handle:

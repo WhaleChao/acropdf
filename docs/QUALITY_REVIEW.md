@@ -97,3 +97,5 @@ python build_mac.py --skip-preflight
 Windows 無主控台 EXE 新增 --integration-output JSON 報告出口；驗證包含封裝 EXE 版本／渲染／往返、錯誤退出碼、校驗碼、靜默安裝、已安裝 EXE 檢查、GUI 載入示範 PDF、來源保留及解除安裝。Windows 發佈須先通過檢查，再上傳至指定來源 commit 的草稿 Release；避開舊 workflow 的 artifact 額度阻擋。macOS DMG 建置、封裝源碼與校驗碼同樣核對。正式簽章、公證、實體列印與輔助閱讀等外部條件未取得驗收證據，發佈為預覽版，不宣稱已達完整商用或獲獎認證。
 
 跨平台檢查追加：保存、匯出及原子發佈在 fsync 前使用可讀寫的暫存檔案代碼，符合 Windows FlushFileBuffers 寫入權限要求；三條路徑新增回歸檢查。工作者關閉測試等待真正的事件迴圈結果，移除固定 100ms 的時序假設。參考：https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers 。
+
+Windows 另修正文件讀取代碼造成原檔鎖定的問題：讀入受程式持有的 PDF 資料，保存／覆寫不再受 MuPDF 開檔代碼阻擋；記憶體文件的增量保存改走原子保存。恢復資料夾設定 Windows 私有 DACL（目前使用者、SYSTEM、系統管理員），不依賴 Windows 忽略的 POSIX mode，並新增 Windows 原生 ACL 檢查。

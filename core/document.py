@@ -45,7 +45,13 @@ class PDFDocument(QObject):
         normalized = os.path.abspath(path)
         self.last_error = ""
         try:
-            doc = fitz.open(normalized)
+            if os.name == "nt" and normalized.lower().endswith(".pdf"):
+                # Windows keeps a file-backed MuPDF source locked against
+                # atomic replacement. Own the bytes so saves can replace it.
+                with open(normalized, "rb") as source:
+                    doc = fitz.open(stream=source.read(), filetype="pdf")
+            else:
+                doc = fitz.open(normalized)
         except Exception:
             try:
                 from core.file_converter import FileConverter
@@ -120,7 +126,7 @@ class PDFDocument(QObject):
             if any(widget.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE and widget.is_signed
                    for page in self._fitz_doc for widget in (page.widgets() or ())):
                 raise ValueError("此文件含數位簽章。為避免失效，請保留原檔；修改與重新簽署需另行處理。")
-            if incremental and same_target:
+            if incremental and same_target and self._fitz_doc.can_save_incrementally():
                 self._fitz_doc.save(out, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
             else:
                 self._atomic_save(out)
