@@ -14,7 +14,7 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 | --- | --- | --- |
 | 日夜介面 | 主題只偵測一次、元件不一致 | 全 app 日間／夜間／跟隨系統；統一 palette、選单、側欄、對話框、畫布、向量圖示、焦點及不可用狀態 |
 | 工作入口 | 空白頁無引導、工具難尋 | 歡迎工作區、最近文件、工作流程卡片、工具搜尋、Cmd/Ctrl K 指令搜尋；原生選單提供快捷鍵入口、搜尋結果輔助閱讀標籤、方向鍵略過不可用指令；小視窗直向卡片及捲動 |
-| 保存／分頁 | 新文件無頁、取消保存仍關閉、Office 來源可能被覆寫、拖曳標籤索引錯誤 | A4 新頁、另存 PDF、原子 fsync 保存／保留權限；失敗／取消保留文件；同步標籤與文件；各文件視圖設定與信號清理 |
+| 保存／分頁 | 新文件無頁、取消保存仍關閉、Office 來源可能被覆寫、拖曳標籤索引錯誤 | A4 新頁、另存 PDF、原子 fsync 保存／保留權限；Mac 使用排他重新命名，避免硬連結發佈卡住及競爭覆寫；失敗／取消保留文件；同步標籤與文件；各文件視圖設定與信號清理 |
 | 渲染 | 背景建立 QPixmap、舊工作回寫、重建殘留、最後頁空白 | QImage 工作者／GUI QPixmap、世代檢查、立即移除版面、導航主動渲染；24M 像素與 16384 邊長上限；錯誤可點擊重試 |
 | 恢復／加密 | 沒有當機恢復、匯出加密破壞目前文件 crypt 狀態 | 加密原子快照、700/600 權限／校驗、恢復後另存；加密／移除保護在私有副本執行，原文件與 undo 保持可用 |
 | 永久塗黑 | 掃描底層像素仍存在、歷史可恢復敏感內容 | 移除文字、相關圖片像素與圖形，清空 undo／redo 和舊恢復快照 |
@@ -38,13 +38,13 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 
 ## 本輪追加審查（1.1.1）
 
-新增 25 項輸出與回歸檢查，覆蓋多行／旋轉標注、文字容量及草稿保留、逐位置 DPI／內嵌影像、表格選取與混合內容保護、向量列印／份數／紙張／表單／非列印旗標、取消／故障、來源硬連結、列印權限、背景工作關閉與 RGB／透明度。
+新增 29 項輸出與回歸檢查，覆蓋多行／旋轉標注、文字容量及草稿保留、逐位置 DPI／內嵌影像、表格選取與混合內容保護、向量列印／份數／紙張／表單／非列印旗標、取消／故障、來源硬連結、列印權限、背景工作關閉與 RGB／透明度；新增排他發佈、競爭建立目的檔／符號連結與無硬連結環境下的列印、圖片匯出及單檔／批次分割檢查。
 
 1.1.1 是本輪建置候選版；安裝結果以交付的 candidate-validation.json 與 installation-validation.json 為準。使用者已解鎖 Mac 並關閉舊程序；已實機開啟測試 PDF、切換夜間主題、搜尋並執行指令。最終編輯、輸出及安裝狀態以交付驗證紀錄為準。
 
 ## 已執行驗證
 
-- 原始 103 項測試；本次完整測試 **267 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
+- 原始 103 項測試；本次完整測試 **271 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
 - pip check、compileall、git diff --check；實际字型／加密／輸出／故障回復檢查。
 - PDF/A 三個等級由 veraPDF 1.30.2 驗證；PDF/UA-1 實際帶內容標記及嵌入字型文件通過 veraPDF。
 - PDF/X 三等級實際 ICC、邊界、嵌入字型、頁數、渲染檢查；没有獨立 PDF/X 認證。
@@ -79,6 +79,8 @@ python scripts/license_inventory.py --output work/dependency-licenses.json
 python scripts/collect_notices.py
 python build_mac.py --skip-preflight
 ```
+
+實機列印發現本機硬連結系統呼叫阻塞；已改用 macOS renamex_np(RENAME_EXCL)，保留競爭時不覆寫的原子保護。參考：https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/rename.2 。
 
 實作參考：https://pymupdf.readthedocs.io/en/latest/page.html 、https://pymupdf.readthedocs.io/en/latest/document.html 、https://doc.qt.io/qt-6/qprinter.html 。
 

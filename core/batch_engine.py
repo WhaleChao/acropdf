@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable
 import fitz
-from core.file_io import atomic_output
+from core.file_io import atomic_output, publish_exclusive
 
 
 class BatchEngine:
@@ -88,7 +88,7 @@ class BatchEngine:
                 pairs.append((temporary, target))
             try:
                 for temporary, target in pairs:
-                    os.link(temporary, target); published.append(str(target))
+                    publish_exclusive(temporary, target); published.append(str(target))
             except Exception:
                 for path in published: Path(path).unlink(missing_ok=True)
                 raise

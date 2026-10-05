@@ -1,8 +1,28 @@
 """Atomic file publication shared by conversion and batch workflows."""
 from contextlib import contextmanager
 import os
+import sys
 from pathlib import Path
 import tempfile
+
+
+def publish_exclusive(temporary, target):
+    """Publish atomically without replacing a file created by another process."""
+    if sys.platform == 'darwin':
+        # Hard-link publication can block in macOS protected/file-provider folders.
+        # RENAME_EXCL preserves the no-overwrite guarantee without a hard link.
+        import ctypes
+        rename = ctypes.CDLL(None, use_errno=True).renamex_np
+        rename.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        if rename(os.fsencode(temporary), os.fsencode(target), 0x00000004):
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error), str(target))
+    elif os.name == 'nt':
+        # Windows rename refuses an existing destination.
+        os.rename(temporary, target)
+    else:
+        os.link(temporary, target)
 
 
 @contextmanager
@@ -30,6 +50,6 @@ def atomic_output(destination, *, source=None, overwrite=False):
         if overwrite:
             os.replace(temporary, target)
         else:
-            os.link(temporary, target)
+            publish_exclusive(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)

@@ -1,6 +1,8 @@
 """Regression fixtures for printing, markup, image placement and structure safety."""
 import io
 import math
+import os
+import sys
 from unittest.mock import Mock
 
 import fitz
@@ -335,4 +337,52 @@ def test_textbox_keeps_draft_on_overflow_and_allows_font_adjustment(sample_pdf, 
     assert dialog._text_edit.toPlainText() == draft and not document.can_undo()
     dialog._size_spin.setValue(5); dialog._insert()
     assert dialog.result() == QDialog.DialogCode.Accepted and document.can_undo()
+    document.close()
+
+
+def test_atomic_publication_preserves_destination_created_during_export(tmp_path):
+    from core.file_io import atomic_output
+    target = tmp_path/'raced.pdf'
+    with pytest.raises(FileExistsError):
+        with atomic_output(target) as temporary:
+            temporary.write_bytes(b'candidate')
+            target.write_bytes(b'other writer')
+    assert target.read_bytes() == b'other writer'
+    assert not list(tmp_path.glob('.acropdf_*'))
+
+
+def test_atomic_publication_preserves_racing_dangling_symlink(tmp_path):
+    from core.file_io import atomic_output
+    target = tmp_path/'raced.pdf'; missing = tmp_path/'missing.pdf'
+    with pytest.raises(FileExistsError):
+        with atomic_output(target) as temporary:
+            temporary.write_bytes(b'candidate')
+            target.symlink_to(missing)
+    assert target.is_symlink() and not missing.exists()
+    assert not list(tmp_path.glob('.acropdf_*'))
+
+
+@pytest.mark.skipif(sys.platform != 'darwin', reason='macOS exclusive rename')
+def test_macos_atomic_publication_does_not_require_hard_links(tmp_path, monkeypatch):
+    from core.file_io import atomic_output
+    monkeypatch.setattr(os, 'link', Mock(side_effect=AssertionError('hard links unavailable')))
+    target = tmp_path/'published.pdf'
+    with atomic_output(target) as temporary:
+        temporary.write_bytes(b'complete output')
+    assert target.read_bytes() == b'complete output'
+    assert not list(tmp_path.glob('.acropdf_*'))
+
+
+@pytest.mark.skipif(sys.platform != 'darwin', reason='macOS exclusive publication')
+def test_macos_multi_file_exports_without_hard_links(sample_pdf, tmp_path, monkeypatch):
+    from core.batch_engine import BatchEngine
+    monkeypatch.setattr(os, 'link', Mock(side_effect=AssertionError('hard links unavailable')))
+    document = opened(sample_pdf)
+    images = tmp_path/'images'; images.mkdir()
+    paths = document.exports.export_images(str(images), dpi=72)
+    assert len(paths) == document.page_count and all(Image.open(path).width > 0 for path in paths)
+    parts = document.pages.split_by_range([(0,0)], str(tmp_path/'parts'))
+    assert len(parts) == 1 and len(fitz.open(parts[0])) == 1
+    batch = BatchEngine().split_pages(str(sample_pdf), str(tmp_path/'batch'), pages_per_file=1)
+    assert len(batch) == document.page_count and all(len(fitz.open(path)) == 1 for path in batch)
     document.close()

@@ -1,5 +1,6 @@
 # ~/Desktop/acropdf/core/page_manager.py
 import fitz
+from core.file_io import publish_exclusive
 
 class PageManager:
     def __init__(self, doc):
@@ -189,7 +190,7 @@ class PageManager:
                 path=Path(directory)/targets[i].name
                 self.extract_pages(list(range(start,end+1)),str(path));staged.append(path)
             try:
-                for path,target in zip(staged,targets): os.link(path,target);published.append(str(target))
+                for path,target in zip(staged,targets): publish_exclusive(path,target);published.append(str(target))
             except Exception:
                 for path in published: Path(path).unlink(missing_ok=True)
                 raise

@@ -1,5 +1,6 @@
 # ~/Desktop/acropdf/core/export_manager.py
 import fitz
+from core.file_io import publish_exclusive
 import os
 import tempfile
 
@@ -180,8 +181,8 @@ class ExportManager:
                 staged.append(temporary)
             try:
                 for temporary, path in zip(staged, paths):
-                    # link refuses to overwrite a concurrently-created destination.
-                    os.link(temporary, path)
+                    # Publication refuses a concurrently-created destination.
+                    publish_exclusive(temporary, path)
                     published.append(path)
             except Exception:
                 for path in published:
