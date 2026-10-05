@@ -46,6 +46,7 @@ QPushButton#recentFileButton { text-align: left; padding: 10px 12px; background:
 #workflowCard:hover, #workflowCard:focus { border-color: @accent; background: @tint; }
 #emptyRecent { color: @muted; padding: 12px 0; }
 QTabWidget::pane { border: none; }
+QTabWidget#documentTabs::tab-bar { alignment: left; }
 QTabBar { background: @raised; }
 QTabBar::tab { color: @muted; background: @raised; border: none; border-right: 1px solid @border; padding: 11px 20px; min-width: 100px; max-width: 260px; }
 QTabBar::tab:selected { color: @accent; background: @surface; border-bottom: 2px solid @accent; }

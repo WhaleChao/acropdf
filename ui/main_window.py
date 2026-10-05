@@ -294,6 +294,7 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self._side_stack, 1)
 
         self._doc_tabs = QTabWidget()
+        self._doc_tabs.setObjectName("documentTabs")
         self._detachable_bar = DetachableTabBar(self._doc_tabs)
         self._doc_tabs.setTabBar(self._detachable_bar)
         self._doc_tabs.setTabsClosable(True)        # 必須在 setTabBar 之後
