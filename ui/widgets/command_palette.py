@@ -15,6 +15,7 @@ class CommandPalette(QDialog):
         self._input.setPlaceholderText("搜尋工具或動作…"); self._input.setAccessibleName("搜尋快速指令")
         self._input.textChanged.connect(self._filter); layout.addWidget(self._input)
         self._results = QListWidget(); self._results.setObjectName("commandResults")
+        self._results.setAccessibleName("可執行指令搜尋結果")
         self._results.itemActivated.connect(self._activate); self._results.itemClicked.connect(self._activate)
         layout.addWidget(self._results)
         self._hint = QLabel("↑ ↓ 選擇   ·   Enter 執行   ·   Esc 關閉")
@@ -40,6 +41,7 @@ class CommandPalette(QDialog):
         for index, (label, keywords, callback, enabled) in enumerate(self._commands):
             if not all(token in (label + " " + keywords).casefold() for token in tokens): continue
             item = QListWidgetItem(label + ("  ·  請先開啟文件" if not enabled else ""))
+            item.setData(Qt.ItemDataRole.AccessibleTextRole, item.text())
             item.setData(Qt.ItemDataRole.UserRole, index)
             if not enabled: item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
             self._results.addItem(item)

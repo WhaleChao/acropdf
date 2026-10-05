@@ -207,8 +207,6 @@ class MainWindow(QMainWindow):
         geometry = self._config.get("window_geometry")
         if geometry:
             self.restoreGeometry(geometry)
-        self._command_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
-        self._command_shortcut.activated.connect(self._show_command_palette)
 
     def open_integration_tool(self, tool_id: str) -> bool:
         """只接受固定工具識別碼，供 OpenDesk 直接開啟對應工作流程。"""
@@ -404,6 +402,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Shift+Z"), self).activated.connect(self._redo)
         edit_menu.addSeparator()
         self._add_action(edit_menu, "搜尋(&F)...", self._toggle_search, "Ctrl+F")
+        self._command_action = self._add_action(edit_menu, "搜尋指令...", self._show_command_palette, "Ctrl+K")
 
         # ── 檢視 ──────────────────────────────────
         view_menu = mb.addMenu("檢視(&V)")
@@ -551,7 +550,8 @@ class MainWindow(QMainWindow):
         menu.addAction(act)
         name = getattr(slot, "__name__", "")
         if name not in {"open_file_dialog", "new_document", "close", "_compare_dialog", "_batch_dialog",
-                        "_filing_dialog", "_template_dialog", "_export_diagnostics", "_about_dialog", "_merge_pdf"}:
+                        "_filing_dialog", "_template_dialog", "_export_diagnostics", "_about_dialog", "_merge_pdf",
+                        "_show_command_palette"}:
             self._document_actions.append(act)
         if name in ("_undo", "_redo"):
             setattr(self, name + "_action", act)
