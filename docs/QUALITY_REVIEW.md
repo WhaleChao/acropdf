@@ -48,7 +48,7 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 
 ## 已執行驗證
 
-- 原始 103 項測試；本次完整測試 **282 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
+- 原始 103 項測試；本次完整測試 **283 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
 - pip check、compileall、git diff --check；實际字型／加密／輸出／故障回復檢查。
 - PDF/A 三個等級由 veraPDF 1.30.2 驗證；PDF/UA-1 實際帶內容標記及嵌入字型文件通過 veraPDF。
 - PDF/X 三等級實際 ICC、邊界、嵌入字型、頁數、渲染檢查；没有獨立 PDF/X 認證。
@@ -99,3 +99,5 @@ Windows 無主控台 EXE 新增 --integration-output JSON 報告出口；驗證�
 跨平台檢查追加：保存、匯出及原子發佈在 fsync 前使用可讀寫的暫存檔案代碼，符合 Windows FlushFileBuffers 寫入權限要求；三條路徑新增回歸檢查。工作者關閉測試等待真正的事件迴圈結果，移除固定 100ms 的時序假設。參考：https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers 。
 
 Windows 另修正文件讀取代碼造成原檔鎖定的問題：讀入受程式持有的 PDF 資料，保存／覆寫不再受 MuPDF 開檔代碼阻擋；記憶體文件的增量保存改走原子保存。恢復資料夾設定 Windows 私有 DACL（目前使用者、SYSTEM、系統管理員），不依賴 Windows 忽略的 POSIX mode，並新增 Windows 原生 ACL 檢查。
+
+Windows 簽章驗證改讀取原生 ROOT 憑證庫，按文件簽署用途與引擎支援的金鑰篩選，避免系統新增 ML-DSA 根憑證使所有傳統簽章檢查中斷；略過不支援憑證會回傳信任判定限制，不將自簽憑證判為可信。

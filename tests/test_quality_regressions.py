@@ -797,3 +797,32 @@ def test_windows_recovery_acl_excludes_other_users(sample_pdf, tmp_path):
     assert not {'S-1-1-0', 'S-1-5-11', 'S-1-5-32-545'} & set(result['sids'])
     assert len(set(result['sids'])) == 3
     doc.close()
+
+
+def test_windows_roots_skip_unknown_keys_without_expanding_trust(monkeypatch):
+    import ssl
+    from datetime import datetime, timedelta, timezone
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from asn1crypto.x509 import Certificate
+    from core.signature_manager import _windows_validation_roots
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Root parsing regression')])
+    now = datetime.now(timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(1).not_valid_before(now-timedelta(days=1)).not_valid_after(now+timedelta(days=1))
+            .sign(key, hashes.SHA256()))
+    valid = cert.public_bytes(serialization.Encoding.DER)
+    unsupported = Certificate.load(valid)
+    unsupported.public_key['algorithm']['algorithm'] = '2.16.840.1.101.3.4.3.19'
+    monkeypatch.setattr(ssl, 'enum_certificates', lambda store: [
+        (valid, 'x509_asn', True),
+        (unsupported.dump(), 'x509_asn', True),
+        (valid, 'x509_asn', {'1.3.6.1.5.5.7.3.1'}),
+        (b'invalid certificate', 'x509_asn', True),
+    ], raising=False)
+    roots, skipped = _windows_validation_roots()
+    assert len(roots) == 1 and roots[0].dump() == valid
+    assert skipped == 2

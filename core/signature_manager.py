@@ -1,6 +1,30 @@
 # ~/Desktop/acropdf/core/signature_manager.py
 """數位簽章（需安裝 pyhanko + pyhanko-certvalidator）"""
 
+def _windows_validation_roots():
+    """Read native roots without letting an unsupported PQC key break all verification."""
+    import ssl
+    from asn1crypto import x509
+    roots = []
+    skipped = 0
+    document_purposes = {'2.5.29.37.0', '1.3.6.1.5.5.7.3.36', '1.3.6.1.4.1.311.10.3.12'}
+    supported_keys = {'rsa', 'rsassa_pss', 'dsa', 'ec', 'ed25519', 'ed448'}
+    for payload, encoding, trust in ssl.enum_certificates('ROOT'):
+        if encoding != 'x509_asn' or not (trust is True or isinstance(trust, (set, frozenset)) and document_purposes.intersection(trust)):
+            continue
+        try:
+            certificate = x509.Certificate.load(payload)
+            if certificate.public_key['algorithm']['algorithm'].native not in supported_keys:
+                skipped += 1
+                continue
+            # Exercise the key parser used when registering a trust anchor.
+            certificate.public_key.sha256
+            roots.append(certificate)
+        except (ValueError, KeyError, TypeError):
+            skipped += 1
+    return roots, skipped
+
+
 class SignatureManager:
     def __init__(self, doc):
         self._doc = doc
@@ -65,22 +89,31 @@ class SignatureManager:
 
     def verify(self, path: str) -> list[dict]:
         try:
+            import os
             from pyhanko.sign.validation import validate_pdf_signature
             from pyhanko.pdf_utils.reader import PdfFileReader
             from pyhanko_certvalidator import ValidationContext
             results = []
+            context_args = {'allow_fetching': False}
+            skipped_roots = 0
+            if os.name == 'nt':
+                roots, skipped_roots = _windows_validation_roots()
+                context_args['trust_roots'] = roots
             with open(path, "rb") as f:
                 reader = PdfFileReader(f)
                 for sig in reader.embedded_signatures:
-                    vc = validate_pdf_signature(sig, signer_validation_context=ValidationContext(allow_fetching=False))
-                    results.append({
+                    vc = validate_pdf_signature(sig, signer_validation_context=ValidationContext(**context_args))
+                    result = {
                         "field": sig.field_name,
                         "valid": vc.valid,
                         "intact": vc.intact,
                         "trusted": vc.trusted,
                         "bottom_line": vc.bottom_line,
                         "signer": str(vc.signer_reported_dt),
-                    })
+                    }
+                    if skipped_roots:
+                        result['trust_warning'] = f'{skipped_roots} 份系統根憑證格式或演算法尚不受支援，未納入信任判定。'
+                    results.append(result)
             return results
         except Exception as e:
             return [{"error": str(e)}]

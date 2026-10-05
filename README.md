@@ -5,7 +5,7 @@ AcroPDF 是單機版 PDF 編輯工具，目標是提供接近商用 PDF 編輯�
 ## 目前版本
 
 - app version: `1.1.4`（內部測試候選版）
-- 已驗證測試：`282 passed`（本次 macOS arm64 / Python 3.14）
+- 已驗證測試：`283 passed`（本次 macOS arm64 / Python 3.14）
 - macOS 產物：`AcroPDF.dmg`
 - Windows 產物：`AcroPDF_Setup.exe`、`AcroPDF_win.zip`（由 GitHub Actions 的 Windows runner 建置）
 - Release 產物會附 `.sha256` checksum。
