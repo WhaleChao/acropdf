@@ -48,7 +48,7 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 
 ## 已執行驗證
 
-- 原始 103 項測試；本次完整測試 **283 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
+- 原始 103 項測試；本次完整測試 **290 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
 - pip check、compileall、git diff --check；實际字型／加密／輸出／故障回復檢查。
 - PDF/A 三個等級由 veraPDF 1.30.2 驗證；PDF/UA-1 實際帶內容標記及嵌入字型文件通過 veraPDF。
 - PDF/X 三等級實際 ICC、邊界、嵌入字型、頁數、渲染檢查；没有獨立 PDF/X 認證。
@@ -63,7 +63,7 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 | --- | --- |
 | 再散布授權 | PyQt、PyMuPDF、Ghostscript 整合及字型等適用權利／商用合約；notices 已附，未冒充已購買授權 |
 | 正式程式碼信任 | Apple Developer ID／公證、Windows Authenticode；本機 ad-hoc 僅檢查封裝完整 |
-| 原生與跨平台 | Mac 原生視窗基本流程已有實機證據；Windows CI 已配置但未遠端執行；其他 Retina／DPI 裝置、閱讀器、實體印表機、VoiceOver／Narrator 仍需驗收 |
+| 原生與跨平台 | Mac 原生視窗基本流程已有實機證據；macOS／Windows × Python 3.12／3.14 遠端檢查已通過；Windows 安裝與封裝的最終結果另附 JSON；其他 Retina／DPI 裝置、閱讀器、實體印表機、VoiceOver／Narrator 仍需驗收 |
 | 標準與語意 | PDF/X 需印刷廠獨立驗證；PDF/UA 的內容意義、描述、表格表頭及閱讀順序要人工審閱；既有結構樹保留，複雜重複 Form／帶註解來源須先處理 |
 | 高階版面 | 任意 RTL、垂直字排、複雜斜向多行、跨區段表格的語意不能靠自動猜測；編輯受安全範圍檢查限制，失敗保留原文 |
 | Office 與 OCR | Word 輸出為可編輯文字、PPT 為視覺頁面；不等同任意 PDF 版面重建。需客戶文件、噪聲／直排掃描語料的實際正確率及時延驗收 |
@@ -101,3 +101,5 @@ Windows 無主控台 EXE 新增 --integration-output JSON 報告出口；驗證�
 Windows 另修正文件讀取代碼造成原檔鎖定的問題：讀入受程式持有的 PDF 資料，保存／覆寫不再受 MuPDF 開檔代碼阻擋；記憶體文件的增量保存改走原子保存。恢復資料夾設定 Windows 私有 DACL（目前使用者、SYSTEM、系統管理員），不依賴 Windows 忽略的 POSIX mode，並新增 Windows 原生 ACL 檢查。
 
 Windows 簽章驗證改讀取原生 ROOT 憑證庫，按文件簽署用途與引擎支援的金鑰篩選，避免系統新增 ML-DSA 根憑證使所有傳統簽章檢查中斷；略過不支援憑證會回傳信任判定限制，不將自簽憑證判為可信。
+
+封裝啟動驗證使用檔案身分比對，不以 Windows 短檔名／完整路徑字串判斷；狀態檔正在寫入時會重試。Finder 與命令列開檔錯誤會留下診斷記錄，新增對應回歸檢查。

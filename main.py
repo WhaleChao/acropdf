@@ -89,7 +89,9 @@ class _AcroPDFApp(QApplication):
         try:
             self._main_window.open_file(path)
         except Exception:
-            pass
+            # Finder/command-line opens must leave evidence when UI setup fails.
+            from core.diagnostics import record_exception
+            record_exception(*sys.exc_info(), APP_VERSION)
 
 
 def main():
@@ -136,6 +138,7 @@ def main():
     window.open_file = _patched_open  # type: ignore[method-assign]
 
     window.show()
+    write_runtime_event("window_ready", version=APP_VERSION)
 
     # 讓 app 知道視窗已就緒，處理待開檔案
     app.set_main_window(window)
@@ -144,10 +147,7 @@ def main():
     # 若從命令列帶入 PDF 路徑（支援多檔）
     for arg in sys.argv[1:]:
         if os.path.isfile(arg):
-            try:
-                window.open_file(arg)
-            except Exception:
-                pass
+            app._open_file_safe(arg)
 
     integration_tool = os.environ.pop("ACROPDF_OPENDESK_TOOL", "")
     if integration_tool:

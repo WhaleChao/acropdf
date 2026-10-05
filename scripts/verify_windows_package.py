@@ -27,6 +27,16 @@ def assert_pe(path):
         assert stream.read(4) == b"PE\0\0", path
 
 
+def gui_loaded_sample(state, sample):
+    """Compare filesystem identity: Windows may report an 8.3 path alias."""
+    try:
+        recorded = json.loads(state.read_text(encoding="utf-8"))["current_file"]
+        return bool(recorded) and os.path.samefile(recorded, sample)
+    except (OSError, ValueError, KeyError, TypeError):
+        # Poll again when the state file is missing or being written.
+        return False
+
+
 def contract(exe, sample, scratch, version):
     results = {}
     for flag, key in (("--integration-status", "status"), ("--integration-live-test", "live")):
@@ -93,7 +103,7 @@ def main():
             state = scratch / "state.json"
             while time.monotonic() < deadline:
                 assert process.poll() is None, "Installed GUI exited unexpectedly"
-                if state.is_file() and json.loads(state.read_text())["current_file"] == str(sample.resolve()):
+                if gui_loaded_sample(state, sample):
                     break
                 time.sleep(0.5)
             else:
@@ -101,11 +111,16 @@ def main():
             time.sleep(3)
             assert process.poll() is None, "Installed GUI crashed after loading PDF"
             report["installed_gui_opened_pdf"] = True
+            report["gui_document_identity"] = {
+                "requested": str(sample),
+                "reported": json.loads(state.read_text(encoding="utf-8"))["current_file"],
+                "samefile": True,
+            }
         except Exception:
             # Preserve startup evidence before the disposable directory is removed.
             for log in (scratch / "diagnostics" / "Logs").glob("*.log"):
                 print(f"GUI diagnostic {log.name}: {log.read_text(encoding='utf-8')}")
-            print(f"GUI state exists: {state.exists()}; exit code: {process.poll()}")
+            print(f"GUI state: {state.read_text(encoding='utf-8') if state.exists() else 'missing'}; exit code: {process.poll()}")
             raise
         finally:
             if process.poll() is None:
