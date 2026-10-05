@@ -48,7 +48,7 @@ Awwwards 的設計、可用性、創意、內容及 Webby 的視覺、導航、�
 
 ## 已執行驗證
 
-- 原始 103 項測試；本次完整測試 **279 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
+- 原始 103 項測試；本次完整測試 **282 passed**，macOS arm64 / Python 3.14 / Qt 6.11。
 - pip check、compileall、git diff --check；實际字型／加密／輸出／故障回復檢查。
 - PDF/A 三個等級由 veraPDF 1.30.2 驗證；PDF/UA-1 實際帶內容標記及嵌入字型文件通過 veraPDF。
 - PDF/X 三等級實際 ICC、邊界、嵌入字型、頁數、渲染檢查；没有獨立 PDF/X 認證。
@@ -95,3 +95,5 @@ python build_mac.py --skip-preflight
 依使用者要求移除頂端「文件處理在本機」、歡迎插畫 LOCAL 徽章與狀態列本機字樣。保留會實際傳送文件內容的 AI 功能說明。
 
 Windows 無主控台 EXE 新增 --integration-output JSON 報告出口；驗證包含封裝 EXE 版本／渲染／往返、錯誤退出碼、校驗碼、靜默安裝、已安裝 EXE 檢查、GUI 載入示範 PDF、來源保留及解除安裝。Windows 發佈須先通過檢查，再上傳至指定來源 commit 的草稿 Release；避開舊 workflow 的 artifact 額度阻擋。macOS DMG 建置、封裝源碼與校驗碼同樣核對。正式簽章、公證、實體列印與輔助閱讀等外部條件未取得驗收證據，發佈為預覽版，不宣稱已達完整商用或獲獎認證。
+
+跨平台檢查追加：保存、匯出及原子發佈在 fsync 前使用可讀寫的暫存檔案代碼，符合 Windows FlushFileBuffers 寫入權限要求；三條路徑新增回歸檢查。工作者關閉測試等待真正的事件迴圈結果，移除固定 100ms 的時序假設。參考：https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers 。

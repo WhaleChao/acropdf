@@ -386,3 +386,31 @@ def test_macos_multi_file_exports_without_hard_links(sample_pdf, tmp_path, monke
     batch = BatchEngine().split_pages(str(sample_pdf), str(tmp_path/'batch'), pages_per_file=1)
     assert len(batch) == document.page_count and all(len(fitz.open(path)) == 1 for path in batch)
     document.close()
+
+
+@pytest.mark.parametrize("operation", ["save", "export", "publish"])
+def test_output_sync_uses_writable_handle(sample_pdf, tmp_path, monkeypatch, operation):
+    # Windows FlushFileBuffers rejects a read-only handle. An empty write
+    # reproduces that access check on POSIX without changing any file bytes.
+    from core.file_io import atomic_output
+    from core.document import PDFDocument
+    import os
+    original_sync = os.fsync
+    def writable_sync(fd):
+        os.write(fd, b"")
+        original_sync(fd)
+    monkeypatch.setattr(os, "fsync", writable_sync)
+    target = tmp_path / "synced.pdf"
+    if operation == "publish":
+        with atomic_output(target) as temporary:
+            temporary.write_bytes(sample_pdf.read_bytes())
+    else:
+        doc = PDFDocument();doc.open(str(sample_pdf))
+        try:
+            if operation == "save": doc.save(str(target))
+            else: doc.exports.export(str(target), "pdf")
+        finally:
+            doc.close()
+    with fitz.open(target) as check:
+        assert check.page_count == 3
+        assert "Sample page 1" in check[0].get_text()

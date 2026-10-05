@@ -126,7 +126,11 @@ def test_dialog_waits_for_running_worker_on_escape(qapp):
     dialog=WorkerDialog();worker=WaitingThread(dialog);dialog._worker=worker;dialog.show();worker.start()
     while not worker.isRunning(): QTest.qWait(1)
     dialog.reject();assert dialog.isVisible() and worker.isInterruptionRequested()
-    release.set();worker.wait(2000);QTest.qWait(100)
+    release.set()
+    import time
+    deadline = time.monotonic() + 3
+    while dialog.isVisible() and time.monotonic() < deadline:
+        QTest.qWait(10)
     assert not dialog.isVisible() and dialog.result()==QDialog.DialogCode.Rejected
 
 

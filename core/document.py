@@ -367,7 +367,7 @@ class PDFDocument(QObject):
         os.close(fd)
         try:
             self._fitz_doc.save(tmp_path, garbage=4, deflate=True, encryption=fitz.PDF_ENCRYPT_KEEP)
-            with open(tmp_path, "rb") as handle:
+            with open(tmp_path, "r+b") as handle:
                 os.fsync(handle.fileno())
             if os.path.exists(output_path):
                 import stat

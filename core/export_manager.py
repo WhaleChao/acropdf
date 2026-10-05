@@ -42,7 +42,7 @@ class ExportManager:
         os.close(fd)
         try:
             exporters[normalized](temporary)
-            with open(temporary, "rb") as handle:
+            with open(temporary, "r+b") as handle:
                 os.fsync(handle.fileno())
             os.replace(temporary, output_path)
         finally:

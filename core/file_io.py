@@ -45,7 +45,7 @@ def atomic_output(destination, *, source=None, overwrite=False):
         yield temporary
         if not temporary.stat().st_size:
             raise ValueError("輸出為空，未發佈檔案。")
-        with temporary.open('rb') as stream:
+        with temporary.open('r+b') as stream:
             os.fsync(stream.fileno())
         if overwrite:
             os.replace(temporary, target)
