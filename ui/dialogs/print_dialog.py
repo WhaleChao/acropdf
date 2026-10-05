@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QRadioButton,
     QSpinBox,
     QVBoxLayout,
+    QScrollArea, QWidget, QFrame,
 )
 
 
@@ -48,6 +49,7 @@ class PrintDialog(QDialog):
 
         self.setWindowTitle("列印")
         self.setMinimumWidth(460)
+        self.resize(540, 640)
         self._setup_ui()
 
     def settings(self) -> PrintSettings:
@@ -56,7 +58,15 @@ class PrintDialog(QDialog):
         return self._settings
 
     def _setup_ui(self):
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        body = QWidget()
+        root = QVBoxLayout(body)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setAccessibleName("列印設定")
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
 
         printer_group = QGroupBox("印表機")
         printer_form = QFormLayout(printer_group)
@@ -131,6 +141,7 @@ class PrintDialog(QDialog):
         self._duplex_combo.addItem("單面", QPrinter.DuplexMode.DuplexNone)
         self._duplex_combo.setCurrentIndex(0)
         self._pdf_check.toggled.connect(self._duplex_combo.setDisabled)
+        self._duplex_combo.setDisabled(self._pdf_check.isChecked())
         duplex_form.addRow("列印方式：", self._duplex_combo)
         root.addWidget(duplex_group)
 
@@ -159,7 +170,7 @@ class PrintDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(print_btn)
         btn_row.addWidget(cancel_btn)
-        root.addLayout(btn_row)
+        outer.addLayout(btn_row)
 
     def _browse_pdf(self):
         path, _ = QFileDialog.getSaveFileName(
