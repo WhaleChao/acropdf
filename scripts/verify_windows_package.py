@@ -86,6 +86,7 @@ def main():
         env.pop("QT_QPA_PLATFORM", None)
         env["ACROPDF_RECOVERY_DIR"] = str(scratch / "recovery")
         env["ACROPDF_STATE_FILE"] = str(scratch / "state.json")
+        env["ACROPDF_APP_DATA_DIR"] = str(scratch / "diagnostics")
         process = subprocess.Popen([str(installed_exe), str(sample)], env=env)
         try:
             deadline = time.monotonic() + 30
@@ -100,6 +101,12 @@ def main():
             time.sleep(3)
             assert process.poll() is None, "Installed GUI crashed after loading PDF"
             report["installed_gui_opened_pdf"] = True
+        except Exception:
+            # Preserve startup evidence before the disposable directory is removed.
+            for log in (scratch / "diagnostics" / "Logs").glob("*.log"):
+                print(f"GUI diagnostic {log.name}: {log.read_text(encoding='utf-8')}")
+            print(f"GUI state exists: {state.exists()}; exit code: {process.poll()}")
+            raise
         finally:
             if process.poll() is None:
                 process.terminate()
