@@ -82,6 +82,7 @@ def build(onefile: bool, use_upx: bool, sign_cert: str | None, sign_pass: str | 
         f"--add-data={BASE / 'acro_platform'}{sep}acro_platform",
         f"--add-data={BASE / 'docs'}{sep}docs",
         f"--add-data={BASE / 'LICENSE'}{sep}.",
+        f"--add-data={BASE / 'THIRD_PARTY_NOTICES.md'}{sep}.",
         # ── PyMuPDF / PyQt6 ──────────────────────────────────
         "--hidden-import", "fitz",
         "--hidden-import", "fitz.utils",

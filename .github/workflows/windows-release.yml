@@ -49,7 +49,9 @@ jobs:
 
       - name: Build Windows package
         shell: pwsh
-        run: python build_win.py --skip-preflight
+        run: |
+          python scripts/collect_notices.py
+          python build_win.py --skip-preflight
 
       - name: Verify portable EXE, installed EXE and GUI startup
         shell: pwsh

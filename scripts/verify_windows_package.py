@@ -56,6 +56,8 @@ def main():
     version = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', (ROOT / "main.py").read_text(encoding="utf-8"))[1]
     exe = DIST / "AcroPDF" / "AcroPDF.exe"
     installer = DIST / "AcroPDF_Setup.exe"
+    assert (DIST / "AcroPDF" / "_internal" / "THIRD_PARTY_NOTICES.md").is_file()
+    assert (DIST / "AcroPDF" / "_internal" / "resources" / "third-party" / "manifest.json").is_file()
     report = {"version": version, "source_commit": os.environ.get("GITHUB_SHA"), "checksums": {}}
     for path in (exe, installer):
         assert_pe(path)

@@ -74,6 +74,7 @@ def build(onefile: bool, sign_id: str | None, skip_preflight: bool = False):
         "--add-data", f"{BASE / 'acro_platform'}:acro_platform",
         "--add-data", f"{BASE / 'docs'}:docs",
         "--add-data", f"{BASE / 'LICENSE'}:.",
+        "--add-data", f"{BASE / 'THIRD_PARTY_NOTICES.md'}:.",
         # ── PyMuPDF / PyQt6 ──────────────────────────────────
         "--hidden-import", "fitz",
         "--hidden-import", "fitz.utils",

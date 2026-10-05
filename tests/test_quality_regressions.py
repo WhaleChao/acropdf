@@ -533,7 +533,7 @@ def test_real_signing_is_atomic_and_signed_pdf_cannot_be_rewritten(sample_pdf,tm
     assert not check.save() and '簽章' in check.last_error
     assert signed.read_bytes()==before
     statuses=check.signatures.verify(str(signed))
-    assert statuses[0]['valid'] and statuses[0]['intact']
+    assert statuses and statuses[0].get('valid') and statuses[0].get('intact'), statuses
     assert not statuses[0]['trusted'] and not statuses[0]['bottom_line']
     check.close();doc.close()
 
@@ -792,7 +792,7 @@ def test_windows_recovery_acl_excludes_other_users(sample_pdf, tmp_path):
     folder = str(store.directory).replace("'", "''")
     snapshot = str(store.directory / entry['file']).replace("'", "''")
     command = "$d=Get-Acl -LiteralPath '" + folder + "';$f=Get-Acl -LiteralPath '" + snapshot + "';@{protected=$d.AreAccessRulesProtected;sids=@($f.Access | ForEach-Object {$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value})}|ConvertTo-Json -Compress"
-    result = json.loads(subprocess.check_output(['powershell','-NoProfile','-Command',command],text=True))
+    result = json.loads(subprocess.check_output(['pwsh','-NoProfile','-Command',command],text=True))
     assert result['protected']
     assert not {'S-1-1-0', 'S-1-5-11', 'S-1-5-32-545'} & set(result['sids'])
     assert len(set(result['sids'])) == 3
