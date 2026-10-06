@@ -4,7 +4,7 @@ AcroPDF 是單機版 PDF 編輯工具，目標是提供接近商用 PDF 編輯�
 
 ## 目前版本
 
-- app version: `1.1.4`（內部測試候選版）
+- app version: `1.2.0`（內部測試候選版）
 - 已驗證測試：`290 passed`（本次 macOS arm64 / Python 3.14）
 - macOS 產物：`AcroPDF.dmg`
 - Windows 產物：`AcroPDF_Setup.exe`、`AcroPDF_win.zip`（由 GitHub Actions 的 Windows runner 建置）
@@ -30,6 +30,28 @@ AcroPDF 是單機版 PDF 編輯工具，目標是提供接近商用 PDF 編輯�
 ```bash
 python scripts/quality_review.py --output work/quality-review
 ```
+
+## 無視窗操作模式（--headless-op）
+
+1.2.0 起，AcroPDF 可被其他程式（例如 MAGI）以子程序呼叫，不開視窗、不載入 Qt、不連網：
+
+```bash
+AcroPDF.app/Contents/MacOS/AcroPDF --headless-op <op> --input <絕對路徑> --output <絕對路徑> [--params-json '<JSON>']
+```
+
+- 只讀 `--input`；只寫 `--output`（同資料夾暫存檔 fsync 後原子更名，已存在則覆寫，但不得與輸入相同）。
+- stdout 只輸出一行 JSON：`{"protocol_version":2,"ok":…,"op":…,"output":…,"output_sha256":…,"details":{…},"error":{"code":…,"message":…}|null}`；診斷訊息走 stderr。
+- 結束碼：成功 `0`、參數錯誤 `64`、處理失敗 `2`。
+- 不處理加密 PDF；轉換 PDF/A 時拒絕已簽署文件。
+
+| op | 說明 | params（皆可省略） |
+|---|---|---|
+| `pdfa_convert` | Ghostscript 轉 PDF/A 後驗證；未通過驗證不發佈輸出 | `level`：`1b`/`2b`（預設）/`3b`；`gs_path`、`verapdf_path`（絕對路徑）；`timeout_sec` |
+| `pdfa_validate` | 只檢查不寫檔，`--output` 可省略；不合規時 `ok:true`、`details.compliant:false` | `level`、`verapdf_path` |
+| `vision_ocr` | Apple Vision（預設 zh-Hant、en）逐頁辨識，輸出帶隱形文字層的可搜尋 PDF；details 含每頁字數與信心分數 | `skip_text_pages`（預設 `true`）、`languages`、`dpi`（72–600，預設 300） |
+| `capabilities` | 不需 input/output；回報 op、gs/veraPDF/Vision 可用性與版本 | — |
+
+PDF/A 驗證：找到 veraPDF（`params.verapdf_path`、環境變數 `ACROPDF_VERAPDF`、PATH，或 App 內附 jar 加系統 Java）時 `details.validation = "verapdf"`，採其正式結果；找不到時 `"basic_only"`，只檢查 XMP pdfaid、字型內嵌、OutputIntent，正式驗證需 veraPDF。
 
 ## OpenDesk TW 一站式整合
 

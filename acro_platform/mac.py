@@ -18,13 +18,13 @@ class MacVisionOCR:
     def is_available(self) -> bool:
         return True  # 既然 __init__ 成功就可用
 
-    def ocr_page(self, page: fitz.Page, lang: str, dpi: int) -> None:
-        """用 macOS Vision 辨識頁面文字，寫入 page 的 text layer"""
+    def recognize_page(self, page: fitz.Page, vision_langs: list[str], dpi: int):
+        """用 Vision 辨識單頁，回傳 [(文字, 信心分數, fitz.Rect 頁面座標)]。不修改頁面。"""
         import math
         from Foundation import NSData
 
         # 1. 渲染頁面為圖片
-        zoom = min(dpi / 72.0, math.sqrt(24_000_000 / page.rect.get_area()), 16384 / max(page.rect.width,page.rect.height))
+        zoom = min(dpi / 72.0, math.sqrt(24_000_000 / page.rect.get_area()), 16384 / max(page.rect.width, page.rect.height))
         mat = fitz.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         png_bytes = pix.tobytes("png")
@@ -37,16 +37,7 @@ class MacVisionOCR:
         )
         request = self._Vision.VNRecognizeTextRequest.alloc().init()
         request.setRecognitionLevel_(self._Vision.VNRequestTextRecognitionLevelAccurate)
-
-        # 設定語言（Vision 用 ISO 639-1 codes）
-        lang_map = {
-            "chi_tra": "zh-Hant", "chi_sim": "zh-Hans",
-            "eng": "en", "jpn": "ja",
-        }
-        vision_langs = []
-        for l in lang.split("+"):
-            vision_langs.append(lang_map.get(l.strip(), l.strip()))
-        request.setRecognitionLanguages_(vision_langs)
+        request.setRecognitionLanguages_(list(vision_langs))
         request.setUsesLanguageCorrection_(True)
 
         # 3. 執行辨識
@@ -54,22 +45,34 @@ class MacVisionOCR:
         if not success[0]:
             raise RuntimeError(f'Apple Vision OCR 失敗：{success[1]}')
 
-        # 4. 提取結果並寫入 page 的透明文字層
-        results = request.results()
-        if not results:
-            return
-
+        # 4. 轉成頁面座標
+        lines = []
         page_rect = page.rect
-        for observation in results:
-            text = observation.topCandidates_(1)[0].string()
+        for observation in request.results() or []:
+            candidates = observation.topCandidates_(1)
+            if not candidates:
+                continue
             bbox = observation.boundingBox()
             # Vision bbox: 原點左下角，正規化座標 [0,1]
             x0 = bbox.origin.x * page_rect.width
             y0 = (1.0 - bbox.origin.y - bbox.size.height) * page_rect.height
             x1 = (bbox.origin.x + bbox.size.width) * page_rect.width
             y1 = (1.0 - bbox.origin.y) * page_rect.height
-            from acro_platform.common import insert_ocr_line
-            insert_ocr_line(page, text, fitz.Rect(x0, y0, x1, y1))
+            lines.append((str(candidates[0].string()), float(candidates[0].confidence()), fitz.Rect(x0, y0, x1, y1)))
+        return lines
+
+    def ocr_page(self, page: fitz.Page, lang: str, dpi: int) -> None:
+        """用 macOS Vision 辨識頁面文字，寫入 page 的 text layer"""
+        from acro_platform.common import insert_ocr_line
+
+        # 設定語言（Vision 用 ISO 639-1 codes）
+        lang_map = {
+            "chi_tra": "zh-Hant", "chi_sim": "zh-Hans",
+            "eng": "en", "jpn": "ja",
+        }
+        vision_langs = [lang_map.get(l.strip(), l.strip()) for l in lang.split("+")]
+        for text, _confidence, rect in self.recognize_page(page, vision_langs, dpi):
+            insert_ocr_line(page, text, rect)
 
     def ocr_image_path(self, image_path: str, lang: str = "chi_tra+eng") -> str:
         """

@@ -5,8 +5,13 @@ import json
 from pathlib import Path
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.1.4"
+APP_VERSION = "1.2.0"
 APP_PUBLISHER = "WhaleChao"
+
+# 無視窗操作模式（MAGI 子程序呼叫）：必須最先分派，全程不載入 PyQt6。
+if "--headless-op" in sys.argv or any(a.startswith("--headless-op=") for a in sys.argv):
+    from core.headless_op import run_headless
+    raise SystemExit(run_headless(sys.argv[1:], APP_VERSION))
 
 # OpenDesk 整合命令必須在載入 Qt 前執行，才能用於快速健康檢查與無介面 LIVE 驗證。
 from core.integration_bridge import dispatch_integration_cli
