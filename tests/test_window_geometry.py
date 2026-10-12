@@ -31,8 +31,12 @@ def test_resize_and_move_keep_documents_and_overflow_controls(qapp, sample_pdf, 
     window.open_file(str(second_pdf))
     window.open_file(str(sample_pdf))
     try:
+        extension_images = []
         for theme in ("light", "dark"):
             window._switch_theme(theme)
+            if sys.platform == "darwin":
+                extension = window.findChild(QToolButton, "qt_toolbar_ext_button")
+                extension_images.append(extension.icon().pixmap(QSize(18, 18)).toImage())
             for width, height in ((1280, 900), (640, 480), (880, 640), (400, 320)) * 3:
                 window.resize(width, height)
                 window.move(30 + width % 100, 40 + height % 100)
@@ -43,6 +47,7 @@ def test_resize_and_move_keep_documents_and_overflow_controls(qapp, sample_pdf, 
         extensions = window.findChildren(QToolButton, "qt_toolbar_ext_button")
         assert len(extensions) >= 2
         if sys.platform == "darwin":
+            assert extension_images[0] != extension_images[1]
             assert all(button.icon().availableSizes() for button in extensions)
             installed = qapp._acro_widget_style
             install_widget_style(qapp)

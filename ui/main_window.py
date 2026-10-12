@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import fitz
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QSplitter, QToolBar,
@@ -838,6 +839,16 @@ class MainWindow(QMainWindow):
     def _theme_changed(self, theme):
         for target, glyph in self._icon_targets:
             target.setIcon(icon(glyph, COLORS[theme]["accent"]))
+        if sys.platform == "darwin":
+            # Qt stores the extension icon at construction; update its color
+            # when switching day/night, using the same safe local icon engine.
+            from PyQt6.QtWidgets import QToolButton
+            for toolbar in self.findChildren(QToolBar):
+                button = toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
+                if button is not None:
+                    glyph = ("overflow-horizontal" if toolbar.orientation() == Qt.Orientation.Horizontal
+                             else "overflow-vertical")
+                    button.setIcon(icon(glyph, COLORS[theme]["accent"]))
         for mode, action in self._theme_actions.items():
             action.setChecked(mode == self._theme_manager.mode)
         self._theme_combo.blockSignals(True)
