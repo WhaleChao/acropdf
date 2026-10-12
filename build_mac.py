@@ -245,7 +245,11 @@ def _make_dmg(app_path: Path):
     staging = DIST / "_dmg_staging"
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(exist_ok=True)
-    shutil.copytree(app_path, staging / app_path.name, dirs_exist_ok=True)
+    # Framework symlinks are part of the signed bundle's structure. Following
+    # them creates duplicate framework roots and invalidates the sealed app.
+    staged_app = staging / app_path.name
+    shutil.copytree(app_path, staged_app, dirs_exist_ok=True, symlinks=True)
+    run(["codesign", "--verify", "--deep", "--strict", str(staged_app)])
     unblock_script = BASE / "scripts" / "unblock_acropdf_macos.command"
     if unblock_script.exists():
         target_script = staging / "解除 macOS 安全限制.command"
