@@ -52,7 +52,8 @@ class TemplateDialog(QDialog):
         layout.addLayout(btn_row)
 
         hint = QLabel("雙擊範本可從中建立新文件；亦可將目前文件存為範本供日後使用。")
-        hint.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        hint.setProperty("role", "muted")
+        hint.setStyleSheet("font-size: 11px;")
         hint.setWordWrap(True)
         layout.addWidget(hint)
 

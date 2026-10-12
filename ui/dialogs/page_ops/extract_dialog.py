@@ -23,7 +23,8 @@ class ExtractDialog(QDialog):
         if self._preselected:
             pages_str = ", ".join(str(p + 1) for p in sorted(self._preselected))
             hint = QLabel(f"已選取頁面：{pages_str}")
-            hint.setStyleSheet("color: #007AFF; font-size: 12px;")
+            hint.setProperty("role", "accent")
+            hint.setStyleSheet("font-size: 12px;")
             layout.addWidget(hint)
 
         layout.addWidget(QLabel("擷取頁碼（逗號或連字號，例：1,3,5-8）："))

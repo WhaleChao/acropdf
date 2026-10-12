@@ -30,7 +30,8 @@ class SearchBar(QWidget):
         # 搜尋輸入框
         self._input = QLineEdit()
         self._input.setPlaceholderText("搜尋…")
-        self._input.setClearButtonEnabled(True)
+        from ui.theme_roles import set_themed_clear_button
+        set_themed_clear_button(self._input)
         self._input.returnPressed.connect(self._on_return)
         self._input.installEventFilter(self)
         self._input.textChanged.connect(self._on_text_changed)

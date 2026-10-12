@@ -136,6 +136,9 @@ def main():
         geometry = json.loads(geometry_report.read_text(encoding="utf-8"))
         assert geometry["passed"] and geometry["version"] == version
         assert geometry["platform"] == "windows"
+        assert geometry["theme_controls"]["passed"]
+        assert geometry["theme_controls"]["button_states"] == 40
+        assert geometry["theme_controls"]["minimum_contrast"] >= 4.5
         report["native_window_geometry"] = geometry
         uninstall = installed / "unins000.exe"
         subprocess.run([str(uninstall), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], check=True, timeout=90)

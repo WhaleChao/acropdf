@@ -123,7 +123,7 @@ class BackgroundDialog(QDialog):
         # 檔案選擇
         file_row = QHBoxLayout()
         self._image_label = QLabel("（尚未選擇）")
-        self._image_label.setStyleSheet("color: #8e8e93;")
+        self._image_label.setProperty("role", "muted")
         file_row.addWidget(self._image_label, 1)
 
         browse_btn = QPushButton("瀏覽...")
@@ -164,7 +164,7 @@ class BackgroundDialog(QDialog):
     def _update_color_preview(self):
         self._color_preview.setStyleSheet(
             f"background-color: {self._chosen_color.name()}; "
-            f"border: 1px solid #999; border-radius: 3px;"
+            f"border: 1px solid palette(mid); border-radius: 3px;"
         )
 
     def _pick_color(self):

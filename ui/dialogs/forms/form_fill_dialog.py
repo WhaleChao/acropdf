@@ -30,7 +30,8 @@ class FormFillDialog(QDialog):
 
         # ── 說明 ─────────────────────────────────────────────────
         hint = QLabel("雙擊「值」欄可直接編輯；修改後按「套用」寫入 PDF。")
-        hint.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        hint.setProperty("role", "muted")
+        hint.setStyleSheet("font-size: 11px;")
         layout.addWidget(hint)
 
         # ── 欄位表格 ─────────────────────────────────────────────

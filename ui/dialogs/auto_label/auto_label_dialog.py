@@ -132,7 +132,8 @@ class AutoLabelDialog(WorkerDialog):
 
         # ── 預覽表格 ──────────────────────────────────────────────
         hint = QLabel("偵測完成後可在「標籤名稱」欄雙擊修改；取消勾選可跳過該頁。")
-        hint.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        hint.setProperty("role", "muted")
+        hint.setStyleSheet("font-size: 11px;")
         layout.addWidget(hint)
 
         self._table = QTableWidget()
@@ -266,7 +267,8 @@ class AutoLabelDialog(WorkerDialog):
             st_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             # 信心度低的標黃
             if b.confidence < 0.6:
-                st_item.setBackground(QColor("#fff3cd"))
+                from ui.theme_roles import set_item_colors
+                set_item_colors(st_item, foreground="warning", background="warningTint")
             self._table.setItem(row, 2, st_item)
 
             # 標籤名稱（可編輯）

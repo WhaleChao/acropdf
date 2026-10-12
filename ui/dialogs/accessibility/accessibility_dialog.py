@@ -162,10 +162,9 @@ class AccessibilityDialog(WorkerDialog):
         if tree: populate(tree, self._structure)
         self._structure.expandToDepth(2)
         self._tagged_label.setText("有標記宣告（未驗證完整性）" if is_tagged else "未標記")
-        self._tagged_label.setStyleSheet(
-            "color: green; font-weight: bold;" if is_tagged
-            else "color: red; font-weight: bold;"
-        )
+        from ui.theme_roles import set_role
+        set_role(self._tagged_label, "success" if is_tagged else "warning")
+        self._tagged_label.setStyleSheet("font-weight: bold;")
 
         title = meta.get("title", "")
         self._title_label.setText(title or "（無）")

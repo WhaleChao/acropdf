@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from core.font_manager import FontManager
+from ui.theme_roles import set_item_colors
 
 
 class FontDialog(QDialog):
@@ -66,7 +67,7 @@ class FontDialog(QDialog):
             embedded_txt = "是" if f.embedded else "否"
             item_emb = QTableWidgetItem(embedded_txt)
             if not f.embedded:
-                item_emb.setForeground(Qt.GlobalColor.red)
+                set_item_colors(item_emb, foreground="danger")
             self._table.setItem(i, 2, item_emb)
             self._table.setItem(i, 3, QTableWidgetItem("是" if f.subset else "否"))
             pages_txt = ", ".join(str(p + 1) for p in f.pages[:10])

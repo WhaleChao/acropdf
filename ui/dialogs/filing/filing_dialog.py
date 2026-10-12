@@ -72,7 +72,8 @@ class FilingDialog(WorkerDialog):
 
         hint = QLabel("系統會依內容自動分類：判決書 / 書狀 / 合約 / 財務 / 未分類，並移動到對應子目錄。")
         hint.setWordWrap(True)
-        hint.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        hint.setProperty("role", "muted")
+        hint.setStyleSheet("font-size: 11px;")
         layout.addWidget(hint)
 
         self._progress = QProgressBar()
@@ -132,7 +133,8 @@ class FilingDialog(WorkerDialog):
             self._table.setItem(i, 0, QTableWidgetItem(r.get("file", "")))
             cat_item = QTableWidgetItem(r.get("category", "錯誤"))
             if r.get("error"):
-                cat_item.setForeground(QColor("#ff453a"))
+                from ui.theme_roles import set_item_colors
+                set_item_colors(cat_item, foreground="danger")
                 cat_item.setText("錯誤：" + r["error"])
             self._table.setItem(i, 1, cat_item)
             self._table.setItem(i, 2, QTableWidgetItem(r.get("output", "")))

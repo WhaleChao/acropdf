@@ -60,7 +60,8 @@ class ReflowDialog(QDialog):
         right.addWidget(self._text_edit)
 
         hint = QLabel("注意：文字重排會先塗黑原區域再插入新文字，請確認後套用。")
-        hint.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        hint.setProperty("role", "muted")
+        hint.setStyleSheet("font-size: 11px;")
         hint.setWordWrap(True)
         right.addWidget(hint)
 

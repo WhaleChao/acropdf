@@ -165,7 +165,6 @@ class FileBrowserPanel(QWidget):
         # ── 分隔線 ──
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #ddd;")
         layout.addWidget(line)
 
         # ── 檔案系統 Model + Proxy ──

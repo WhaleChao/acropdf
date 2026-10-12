@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import fitz
+import html
+from ui.theme import theme_manager, COLORS
+from ui.theme_roles import color
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QSplitter, QTextEdit, QWidget,
@@ -57,6 +60,10 @@ class CompareResultDialog(QDialog):
                 self._diff_nav.append(diff.page_num)
 
         self._show_page(self._diff_nav[0] if self._diff_nav else 0)
+        theme_manager().changed.connect(self._theme_changed)
+
+    def _theme_changed(self, _theme):
+        self._show_page(self._page_spin.value() - 1)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -145,7 +152,7 @@ class CompareResultDialog(QDialog):
             pix_a = _fitz_page_to_qpixmap(doc_a[page_num], self._zoom)
             if diff and diff.visual_rects:
                 pix_a = _overlay_rects(pix_a, diff.visual_rects,
-                                       QColor(255, 0, 0), self._zoom)
+                                       color("overlayDanger"), self._zoom)
             self._lbl_a.setPixmap(pix_a)
             self._lbl_a.resize(pix_a.size())
 
@@ -154,7 +161,7 @@ class CompareResultDialog(QDialog):
             pix_b = _fitz_page_to_qpixmap(doc_b[page_num], self._zoom)
             if diff and diff.visual_rects:
                 pix_b = _overlay_rects(pix_b, diff.visual_rects,
-                                       QColor(0, 180, 0), self._zoom)
+                                       color("overlaySuccess"), self._zoom)
             self._lbl_b.setPixmap(pix_b)
             self._lbl_b.resize(pix_b.size())
 
@@ -164,13 +171,14 @@ class CompareResultDialog(QDialog):
         # 文字 diff
         if diff:
             html_lines = []
+            colors = COLORS[theme_manager().resolved]
             for line in diff.text_removed:
                 html_lines.append(
-                    f'<span style="background:#ffd7d7;color:#c00;">- {line}</span>'
+                    f'<span style="background:{colors["dangerTint"]};color:{colors["danger"]};">- {html.escape(line)}</span>'
                 )
             for line in diff.text_added:
                 html_lines.append(
-                    f'<span style="background:#d7ffd7;color:#060;">+ {line}</span>'
+                    f'<span style="background:{colors["successTint"]};color:{colors["success"]};">+ {html.escape(line)}</span>'
                 )
             self._diff_text.setHtml("<br>".join(html_lines) if html_lines else "（此頁無文字差異）")
         else:

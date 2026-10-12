@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+from ui.theme_roles import color
+
 import math
 from collections import Counter
 from dataclasses import dataclass
@@ -407,12 +409,12 @@ class UnderlineTool(BaseTool):
         if not self._overlay:
             return
         painter.save()
-        pen = QPen(QColor(0, 0, 220), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor.fromRgbF(0, 0, 1), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
         # 畫底線（只在 overlay 底邊）
         r = self._overlay
         painter.drawRect(r)
-        thick_pen = QPen(QColor(0, 0, 220), 3)
+        thick_pen = QPen(QColor.fromRgbF(0, 0, 1), 3)
         painter.setPen(thick_pen)
         painter.drawLine(r.bottomLeft(), r.bottomRight())
         painter.restore()
@@ -455,12 +457,12 @@ class StrikeoutTool(BaseTool):
         if not self._overlay:
             return
         painter.save()
-        pen = QPen(QColor(200, 0, 0), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor.fromRgbF(1, 0, 0), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
         painter.drawRect(self._overlay)
         r = self._overlay
         mid_y = (r.top() + r.bottom()) // 2
-        thick_pen = QPen(QColor(200, 0, 0), 3)
+        thick_pen = QPen(QColor.fromRgbF(1, 0, 0), 3)
         painter.setPen(thick_pen)
         painter.drawLine(r.left(), mid_y, r.right(), mid_y)
         painter.restore()
@@ -511,7 +513,7 @@ class FreehandTool(BaseTool):
         if len(self._stroke) < 2:
             return
         painter.save()
-        pen = QPen(QColor(0, 0, 200), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor.fromRgbF(0, 0, 0.8), 2, Qt.PenStyle.SolidLine)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
@@ -580,9 +582,9 @@ class EraserTool(BaseTool):
         if not self._cursor_pos:
             return
         painter.save()
-        pen = QPen(QColor(200, 0, 0), 2, Qt.PenStyle.DashLine)
+        pen = QPen(color("overlayDanger"), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(200, 0, 0, 20))
+        painter.setBrush(color("overlayDanger", 20))
         painter.drawEllipse(self._cursor_pos, 12, 12)
         painter.restore()
 
@@ -747,9 +749,10 @@ class CircleTool(BaseTool):
         if not self._overlay:
             return
         painter.save()
-        pen = QPen(QColor(0, 120, 255), 2, Qt.PenStyle.DashLine)
+        # Preview the actual PDF circle ink, rather than a UI selection color.
+        pen = QPen(QColor.fromRgbF(0, 0.5, 1), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(0, 120, 255, 20))
+        painter.setBrush(QColor.fromRgbF(0, 0.5, 1, 20 / 255))
         painter.drawEllipse(self._overlay)
         painter.restore()
 
@@ -791,7 +794,7 @@ class LineTool(BaseTool):
         if not self._start or not self._end_pos:
             return
         painter.save()
-        painter.setPen(QPen(QColor(0, 0, 0), 2, Qt.PenStyle.SolidLine))
+        painter.setPen(QPen(QColor.fromRgbF(0, 0, 0), 2, Qt.PenStyle.SolidLine))
         painter.drawLine(self._start, self._end_pos)
         painter.restore()
 
@@ -832,7 +835,7 @@ class ArrowTool(BaseTool):
         if not self._start or not self._end_pos:
             return
         painter.save()
-        pen = QPen(QColor(200, 0, 0), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor.fromRgbF(0.8, 0, 0), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
         painter.drawLine(self._start, self._end_pos)
         # 箭頭頭部
@@ -849,7 +852,7 @@ class ArrowTool(BaseTool):
             rx = int(ex - ah * ux - aw * uy)
             ry = int(ey - ah * uy + aw * ux)
             from PyQt6.QtGui import QPolygon
-            painter.setBrush(QColor(200, 0, 0))
+            painter.setBrush(QColor.fromRgbF(0.8, 0, 0))
             painter.drawPolygon(QPolygon([
                 self._end_pos,
                 QPoint(lx, ly),
@@ -895,11 +898,11 @@ class MeasureDistTool(BaseTool):
             return
         painter.save()
         # 線條
-        pen = QPen(QColor(255, 100, 0), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(color("overlayWarning"), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
         painter.drawLine(self._p1, self._p2)
         # 端點
-        painter.setBrush(QColor(255, 100, 0))
+        painter.setBrush(color("overlayWarning"))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(self._p1, 5, 5)
         painter.drawEllipse(self._p2, 5, 5)
@@ -907,17 +910,14 @@ class MeasureDistTool(BaseTool):
         if self._label:
             mid = QPoint((self._p1.x() + self._p2.x()) // 2,
                          (self._p1.y() + self._p2.y()) // 2 - 12)
-            bg_pen = QPen(QColor(255, 255, 255))
-            painter.setPen(bg_pen)
             f = QFont()
             f.setBold(True)
             f.setPointSize(10)
             painter.setFont(f)
-            # 白色陰影
-            for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
-                painter.setPen(QColor(255, 255, 255))
-                painter.drawText(QPoint(mid.x() + dx, mid.y() + dy), self._label)
-            painter.setPen(QColor(200, 60, 0))
+            bounds = painter.fontMetrics().boundingRect(self._label)
+            bounds.translate(mid)
+            painter.fillRect(bounds.adjusted(-4, -3, 4, 3), color("surface"))
+            painter.setPen(color("warning"))
             painter.drawText(mid, self._label)
         painter.restore()
 
@@ -995,26 +995,26 @@ class MeasureAreaTool(BaseTool):
         if not pts:
             return
         painter.save()
-        pen = QPen(QColor(0, 180, 90), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(color("overlaySuccess"), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
         # 已確定的邊
         for i in range(len(pts) - 1):
             painter.drawLine(pts[i], pts[i + 1])
         # 游標到最後一點的橡皮筋
         if self._hover:
-            pen2 = QPen(QColor(0, 180, 90), 2, Qt.PenStyle.DotLine)
+            pen2 = QPen(color("overlaySuccess"), 2, Qt.PenStyle.DotLine)
             painter.setPen(pen2)
             painter.drawLine(pts[-1], self._hover)
             if len(pts) >= 2:
                 painter.drawLine(pts[0], self._hover)
         # 頂點
-        painter.setBrush(QColor(0, 180, 90))
+        painter.setBrush(color("overlaySuccess"))
         painter.setPen(Qt.PenStyle.NoPen)
         for p in pts:
             painter.drawEllipse(p, 5, 5)
         # 第一個點更大，提示可閉合
         if pts:
-            painter.setBrush(QColor(255, 220, 0))
+            painter.setBrush(color("overlayWarning"))
             painter.drawEllipse(pts[0], 7, 7)
         # 面積文字
         if self._label and len(pts) >= 3:
@@ -1024,7 +1024,10 @@ class MeasureAreaTool(BaseTool):
             f.setBold(True)
             f.setPointSize(10)
             painter.setFont(f)
-            painter.setPen(QColor(0, 100, 40))
+            bounds = painter.fontMetrics().boundingRect(self._label)
+            bounds.translate(QPoint(cx, cy))
+            painter.fillRect(bounds.adjusted(-4, -3, 4, 3), color("surface"))
+            painter.setPen(color("success"))
             painter.drawText(QPoint(cx, cy), self._label)
         painter.restore()
 
@@ -1162,15 +1165,15 @@ class FormFieldTool(BaseTool):
         if not self._overlay:
             return
         painter.save()
-        pen = QPen(QColor(0, 150, 80), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(color("overlaySuccess"), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(200, 255, 220, 40))
+        painter.setBrush(color("overlaySuccess", 40))
         painter.drawRect(self._overlay)
         # 畫「欄位」提示
         f = QFont()
         f.setPointSize(9)
         painter.setFont(f)
-        painter.setPen(QColor(0, 120, 60))
+        painter.setPen(color("overlaySuccess"))
         painter.drawText(self._overlay, Qt.AlignmentFlag.AlignCenter, "表單欄位")
         painter.restore()
 
@@ -1287,8 +1290,8 @@ class SelectTool(BaseTool):
     def draw_overlay(self, widget, painter):
         if self._dragging and self._start is not None and self._end is not None:
             rect = _normalized_rect(self._start, self._end)
-            painter.setPen(QPen(QColor(0, 120, 215), 1, Qt.PenStyle.DashLine))
-            painter.setBrush(QColor(0, 120, 215, 40))
+            painter.setPen(QPen(color("overlayAccent"), 1, Qt.PenStyle.DashLine))
+            painter.setBrush(color("overlayAccent", 40))
             painter.drawRect(rect)
 
 

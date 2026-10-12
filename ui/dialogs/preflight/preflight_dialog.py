@@ -112,9 +112,11 @@ class PreflightDialog(WorkerDialog):
                 issue.message, fixable_str
             ])
             if issue.severity == "error":
-                item.setForeground(0, QColor("red"))
+                from ui.theme_roles import set_item_colors
+                set_item_colors(item, foreground="danger")
             elif issue.severity == "warning":
-                item.setForeground(0, QColor("orange"))
+                from ui.theme_roles import set_item_colors
+                set_item_colors(item, foreground="warning")
 
         errors = report.error_count
         warnings = report.warning_count

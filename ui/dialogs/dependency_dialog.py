@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 from core.dependency_manager import DependencyManager, Dependency, DepStatus
+from ui.theme_roles import set_role
 
 class InstallThread(QThread):
     """背景執行安裝，不阻塞 UI"""
@@ -64,7 +65,7 @@ class DependencyDialog(WorkerDialog):
         layout.addWidget(title)
 
         subtitle = QLabel("安裝這些程式可以解鎖更多功能。標記「選用」的項目可以略過。")
-        subtitle.setStyleSheet("color: #8e8e93;")
+        subtitle.setProperty("role", "muted")
         layout.addWidget(subtitle)
 
         layout.addSpacing(8)
@@ -86,12 +87,7 @@ class DependencyDialog(WorkerDialog):
             name_label = QLabel(f"<b>{dep.name}</b>")
             name_label.setStyleSheet("font-size: 12pt;")
             status_label = QLabel(dep.status.value)
-            if dep.required:
-                status_label.setStyleSheet(
-                    "color: white; background: #e74c3c; padding: 2px 8px; border-radius: 4px;")
-            else:
-                status_label.setStyleSheet(
-                    "color: white; background: #f39c12; padding: 2px 8px; border-radius: 4px;")
+            set_role(status_label, "dangerBadge" if dep.required else "warningBadge")
             header.addWidget(name_label)
             header.addStretch()
             header.addWidget(status_label)
@@ -100,14 +96,16 @@ class DependencyDialog(WorkerDialog):
             # 用途說明
             purpose_label = QLabel(dep.purpose)
             purpose_label.setWordWrap(True)
-            purpose_label.setStyleSheet("color: #8e8e93; margin-bottom: 4px;")
+            purpose_label.setProperty("role", "muted")
+            purpose_label.setStyleSheet("margin-bottom: 4px;")
             group_layout.addWidget(purpose_label)
 
             # 安裝備註
             if dep.install_note:
                 note_label = QLabel(dep.install_note)
                 note_label.setWordWrap(True)
-                note_label.setStyleSheet("color: #007AFF; font-size: 10pt;")
+                note_label.setProperty("role", "accent")
+                note_label.setStyleSheet("font-size: 10pt;")
                 group_layout.addWidget(note_label)
 
             # 進度條
@@ -125,8 +123,7 @@ class DependencyDialog(WorkerDialog):
             btn_row = QHBoxLayout()
 
             auto_btn = QPushButton("自動安裝")
-            auto_btn.setStyleSheet(
-                "background: #27ae60; color: white; padding: 6px 16px; border-radius: 4px;")
+            auto_btn.setProperty("role", "primary")
             auto_btn.setToolTip(
                 f"macOS: {dep.install_cmd_mac}\nWindows: {dep.install_cmd_win}")
             auto_btn.clicked.connect(
@@ -138,7 +135,7 @@ class DependencyDialog(WorkerDialog):
                 lambda checked, url=dep.download_url: webbrowser.open(url))
 
             skip_btn = QPushButton("略過")
-            skip_btn.setStyleSheet("padding: 6px 16px; color: #8e8e93;")
+            skip_btn.setStyleSheet("padding: 6px 16px;")
             skip_btn.clicked.connect(lambda checked, g=group: g.hide())
 
             btn_row.addWidget(auto_btn)
@@ -172,9 +169,8 @@ class DependencyDialog(WorkerDialog):
         bottom.addStretch()
 
         close_btn = QPushButton("繼續使用 AcroPDF")
-        close_btn.setStyleSheet(
-            "background: #3498db; color: white; padding: 8px 24px; "
-            "border-radius: 4px; font-size: 11pt;")
+        close_btn.setProperty("role", "primary")
+        close_btn.setStyleSheet("padding: 8px 24px; font-size: 11pt;")
         close_btn.clicked.connect(self.accept)
         bottom.addWidget(close_btn)
 
@@ -201,15 +197,14 @@ class DependencyDialog(WorkerDialog):
 
         if success:
             widgets["result_label"].setText(f"✅ {message}")
-            widgets["result_label"].setStyleSheet("color: #27ae60; font-weight: bold;")
+            set_role(widgets["result_label"], "success")
             widgets["auto_btn"].setText("✅ 已安裝")
             widgets["auto_btn"].setEnabled(False)
             widgets["status_label"].setText("已安裝")
-            widgets["status_label"].setStyleSheet(
-                "color: white; background: #27ae60; padding: 2px 8px; border-radius: 4px;")
+            set_role(widgets["status_label"], "successBadge")
         else:
             widgets["result_label"].setText(f"❌ {message}")
-            widgets["result_label"].setStyleSheet("color: #e74c3c;")
+            set_role(widgets["result_label"], "danger")
             widgets["auto_btn"].setText("重試自動安裝")
             widgets["auto_btn"].setEnabled(True)
 

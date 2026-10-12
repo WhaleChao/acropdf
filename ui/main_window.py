@@ -66,7 +66,8 @@ class AcrobatToolsPanel(QScrollArea):
         self._filter = QLineEdit()
         self._filter.setPlaceholderText("搜尋工具…")
         self._filter.setAccessibleName("搜尋 PDF 工具")
-        self._filter.setClearButtonEnabled(True)
+        from ui.theme_roles import set_themed_clear_button
+        set_themed_clear_button(self._filter)
         self._filter.textChanged.connect(self._filter_tools)
         layout.addWidget(self._filter)
 

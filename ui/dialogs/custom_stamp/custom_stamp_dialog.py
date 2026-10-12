@@ -84,13 +84,14 @@ class CustomStampDialog(QDialog):
         self._preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._preview.setMinimumSize(200, 200)
         self._preview.setStyleSheet(
-            "QLabel { background: palette(base); border: 1px solid #8e8e93; border-radius: 4px; }"
+            "QLabel { background: palette(base); border: 1px solid palette(mid); border-radius: 4px; }"
         )
         right_layout.addWidget(self._preview, 1)
 
         self._path_label = QLabel("")
         self._path_label.setWordWrap(True)
-        self._path_label.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        self._path_label.setProperty("role", "muted")
+        self._path_label.setStyleSheet("font-size: 11px;")
         right_layout.addWidget(self._path_label)
 
         splitter.addWidget(right)

@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtPrintSupport import QPrinter
 from ui.dialogs.print_dialog import PrintDialog
+from ui.theme import COLORS, theme_manager
+from PyQt6.QtGui import QTextDocument
 
 
 # ── 註解類型對照表 ──────────────────────────────────────────────────
@@ -127,30 +129,31 @@ def _to_plain(entries: list[_AnnotEntry]) -> str:
     return "\n".join(lines)
 
 
-def _to_html(entries: list[_AnnotEntry]) -> str:
+def _to_html(entries: list[_AnnotEntry], theme="light") -> str:
+    colors = COLORS[theme]
     rows: list[str] = []
     for e in entries:
         rows.append(
             f"<tr>"
-            f"<td style='padding:4px;border:1px solid #ccc;text-align:center'>{e.page}</td>"
-            f"<td style='padding:4px;border:1px solid #ccc'>{html.escape(e.type_label)}</td>"
-            f"<td style='padding:4px;border:1px solid #ccc'>{html.escape(e.content)}</td>"
-            f"<td style='padding:4px;border:1px solid #ccc'>{html.escape(e.author)}</td>"
-            f"<td style='padding:4px;border:1px solid #ccc'>{html.escape(e.date)}</td>"
+            f"<td style='padding:4px;border:1px solid {colors['border']};text-align:center'>{e.page}</td>"
+            f"<td style='padding:4px;border:1px solid {colors['border']}'>{html.escape(e.type_label)}</td>"
+            f"<td style='padding:4px;border:1px solid {colors['border']}'>{html.escape(e.content)}</td>"
+            f"<td style='padding:4px;border:1px solid {colors['border']}'>{html.escape(e.author)}</td>"
+            f"<td style='padding:4px;border:1px solid {colors['border']}'>{html.escape(e.date)}</td>"
             f"</tr>"
         )
     table = "\n".join(rows)
     return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        "<title>註解摘要報告</title></head><body>"
+        f'<title>註解摘要報告</title></head><body style="color:{colors["text"]};background:{colors["surface"]}">'
         f"<h2>註解摘要報告　共 {len(entries)} 筆</h2>"
         "<table style='border-collapse:collapse;width:100%'>"
         "<thead><tr>"
-        "<th style='padding:6px;border:1px solid #999;background:#f0f0f0'>頁碼</th>"
-        "<th style='padding:6px;border:1px solid #999;background:#f0f0f0'>類型</th>"
-        "<th style='padding:6px;border:1px solid #999;background:#f0f0f0'>內容</th>"
-        "<th style='padding:6px;border:1px solid #999;background:#f0f0f0'>作者</th>"
-        "<th style='padding:6px;border:1px solid #999;background:#f0f0f0'>日期</th>"
+        f"<th style='padding:6px;border:1px solid {colors['border']};background:{colors['raised']}'>頁碼</th>"
+        f"<th style='padding:6px;border:1px solid {colors['border']};background:{colors['raised']}'>類型</th>"
+        f"<th style='padding:6px;border:1px solid {colors['border']};background:{colors['raised']}'>內容</th>"
+        f"<th style='padding:6px;border:1px solid {colors['border']};background:{colors['raised']}'>作者</th>"
+        f"<th style='padding:6px;border:1px solid {colors['border']};background:{colors['raised']}'>日期</th>"
         "</tr></thead><tbody>"
         f"{table}"
         "</tbody></table></body></html>"
@@ -171,6 +174,7 @@ class AnnotSummaryDialog(QDialog):
         self.resize(780, 560)
         self._setup_ui()
         self._load()
+        theme_manager().changed.connect(self._theme_changed)
 
     # ── UI 建構 ───────────────────────────────────────────────────
     def _setup_ui(self):
@@ -219,7 +223,13 @@ class AnnotSummaryDialog(QDialog):
             self._btn_print.setEnabled(False)
             return
 
-        self._text_edit.setHtml(_to_html(self._entries))
+        self._text_edit.setHtml(_to_html(self._entries, theme_manager().resolved))
+
+    def _theme_changed(self, _theme):
+        scroll = self._text_edit.verticalScrollBar().value()
+        if self._entries:
+            self._text_edit.setHtml(_to_html(self._entries, theme_manager().resolved))
+            self._text_edit.verticalScrollBar().setValue(scroll)
 
     # ── 匯出 ─────────────────────────────────────────────────────
     def _on_export(self):
@@ -258,6 +268,9 @@ class AnnotSummaryDialog(QDialog):
             printer.setOutputFileName(settings.output_pdf_path)
         else:
             printer.setPrinterName(settings.printer_name)
-        self._text_edit.print(printer)
+        # Print on paper with the export palette, regardless of screen theme.
+        report = QTextDocument()
+        report.setHtml(_to_html(self._entries, "light"))
+        report.print(printer)
         if settings.output_pdf_path:
             QMessageBox.information(self, "列印完成", f"PDF 已輸出至：\n{settings.output_pdf_path}")

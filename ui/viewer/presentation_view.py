@@ -9,6 +9,8 @@ from PyQt6.QtGui import (
     QPainter, QPixmap, QColor, QFont, QKeyEvent, QMouseEvent, QPaintEvent,
     QResizeEvent,
 )
+from ui.theme import theme_manager
+from ui.theme_roles import color
 
 
 class PresentationView(QWidget):
@@ -44,13 +46,12 @@ class PresentationView(QWidget):
         # 視窗屬性
         self.setWindowTitle("簡報模式")
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setStyleSheet("background-color: black;")
+        theme_manager().changed.connect(self.update)
         self.setCursor(Qt.CursorShape.BlankCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        # 頁碼標籤字型（半透明白色）
+        # Page counter follows the same palette as the presentation canvas.
         self._label_font = QFont("Microsoft JhengHei", 14)
-        self._label_color = QColor(255, 255, 255, 160)
 
         # 進入全螢幕並渲染第一頁
         self.showFullScreen()
@@ -100,7 +101,7 @@ class PresentationView(QWidget):
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0))
+        painter.fillRect(self.rect(), color("canvas"))
 
         if self._pixmap:
             # 置中繪製
@@ -113,13 +114,14 @@ class PresentationView(QWidget):
         # 右下角頁碼標籤
         label = f"{self._current_page + 1} / {self._page_count}"
         painter.setFont(self._label_font)
-        painter.setPen(self._label_color)
+        painter.setPen(color("text"))
         margin = 20
-        painter.drawText(
-            self.width() - margin - painter.fontMetrics().horizontalAdvance(label),
-            self.height() - margin,
-            label,
-        )
+        x = self.width() - margin - painter.fontMetrics().horizontalAdvance(label)
+        y = self.height() - margin
+        bounds = painter.fontMetrics().boundingRect(label)
+        bounds.translate(x, y)
+        painter.fillRect(bounds.adjusted(-5, -3, 5, 3), color("surface"))
+        painter.drawText(x, y, label)
         painter.end()
 
     # ── 頁面導覽 ────────────────────────────────────────────────────

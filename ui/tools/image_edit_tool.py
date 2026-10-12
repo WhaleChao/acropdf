@@ -169,9 +169,10 @@ class ImageEditTool(BaseTool):
             return
         painter.save()
         # 虛線邊框
-        pen = QPen(QColor(0, 120, 215), 2, Qt.PenStyle.DashLine)
+        from ui.theme_roles import color
+        pen = QPen(color("overlayAccent"), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(0, 120, 215, 20))
+        painter.setBrush(color("overlayAccent", 20))
         painter.drawRect(self._hover_rect)
 
         # 四角控制點（小方塊）
@@ -183,8 +184,8 @@ class ImageEditTool(BaseTool):
             self._hover_rect.bottomLeft(),
             self._hover_rect.bottomRight(),
         ]
-        painter.setPen(QPen(QColor(0, 90, 180), 1))
-        painter.setBrush(QColor(255, 255, 255))
+        painter.setPen(QPen(color("overlayAccent"), 1))
+        painter.setBrush(color("surface"))
         for c in corners:
             painter.drawRect(c.x() - hs, c.y() - hs, handle_size, handle_size)
 

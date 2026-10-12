@@ -3,7 +3,11 @@ from PyQt6.QtCore import Qt, QRectF, QPointF
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QPainterPath
 
 
-def icon(name, color="#14665e", size=20):
+def icon(name, color=None, size=20):
+    if color is None:
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtGui import QPalette
+        color = QApplication.palette().color(QPalette.ColorRole.Link)
     pm = QPixmap(size * 2, size * 2)
     pm.setDevicePixelRatio(2)
     pm.fill(Qt.GlobalColor.transparent)

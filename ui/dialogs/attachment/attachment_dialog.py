@@ -70,7 +70,8 @@ class AttachmentDialog(QDialog):
             "請升級至 PyMuPDF 1.18.0 或更新版本。"
         )
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        msg.setStyleSheet("color: #8e8e93; font-size: 13px; padding: 40px;")
+        msg.setProperty("role", "muted")
+        msg.setStyleSheet("font-size: 13px; padding: 40px;")
         layout.addWidget(msg)
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
@@ -84,7 +85,8 @@ class AttachmentDialog(QDialog):
 
         # ── 說明 ─────────────────────────────────────────────────────
         info_label = QLabel("管理 PDF 文件中的嵌入式檔案附件。")
-        info_label.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        info_label.setProperty("role", "muted")
+        info_label.setStyleSheet("font-size: 11px;")
         layout.addWidget(info_label)
 
         # ── 主要區域：清單 + 按鈕 ────────────────────────────────────
@@ -118,7 +120,8 @@ class AttachmentDialog(QDialog):
 
         # 檔案資訊
         self._info_label = QLabel("")
-        self._info_label.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        self._info_label.setProperty("role", "muted")
+        self._info_label.setStyleSheet("font-size: 11px;")
         self._info_label.setWordWrap(True)
         btn_col.addWidget(self._info_label)
 
@@ -127,7 +130,8 @@ class AttachmentDialog(QDialog):
 
         # ── 底部狀態 ─────────────────────────────────────────────────
         self._status = QLabel("")
-        self._status.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        self._status.setProperty("role", "muted")
+        self._status.setStyleSheet("font-size: 11px;")
         layout.addWidget(self._status)
 
         # ── 按鈕 ─────────────────────────────────────────────────────

@@ -43,7 +43,8 @@ class LayerDialog(QDialog):
 
         # 說明
         self._info_label = QLabel("管理文件中的圖層（選用性內容群組）。")
-        self._info_label.setStyleSheet("color: #8e8e93; font-size: 12px;")
+        self._info_label.setProperty("role", "muted")
+        self._info_label.setStyleSheet("font-size: 12px;")
         layout.addWidget(self._info_label)
 
         # 圖層樹

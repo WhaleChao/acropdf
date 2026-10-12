@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import QTextEdit, QApplication, QMessageBox
 
 from app.constants import ToolMode
 from ui.tools.annotation_tools import BaseTool
+from ui.theme_roles import color
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -86,10 +87,7 @@ class _InlineEditor(QTextEdit):
         super().__init__(parent)
         self.setFrameShape(QTextEdit.Shape.Box)
         self.setLineWidth(1)
-        self.setStyleSheet(
-            "QTextEdit { background: palette(base); "
-            "border: 2px solid #007AFF; color: palette(text); }"
-        )
+        self.setProperty("role", "inlineEditor")
         # 設定字型大小（依縮放比例）
         display_size = max(8, int(font_size * zoom))
         font = QFont("Helvetica", display_size)
@@ -215,9 +213,9 @@ class TextEditTool(BaseTool):
         if self._hover_rect is None or self._hover_page != widget.page_num:
             return
         painter.save()
-        pen = QPen(QColor(74, 144, 217, 180), 2, Qt.PenStyle.DashLine)
+        pen = QPen(color("overlayAccent", 180), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(74, 144, 217, 25))
+        painter.setBrush(color("overlayAccent", 25))
         painter.drawRect(self._hover_rect)
         painter.restore()
 

@@ -204,7 +204,6 @@ class GridOverlay(QWidget):
         self._zoom: float = 1.0
         self._page_rect: QRect | None = None
         self._spacing: int = self._DEFAULT_SPACING
-        self._grid_color = QColor(100, 149, 237, 40)  # 淺藍、alpha 40
 
     # ── 公開 API ──────────────────────────────────────────────────
 
@@ -233,7 +232,8 @@ class GridOverlay(QWidget):
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        pen = QPen(self._grid_color, 1, Qt.PenStyle.SolidLine)
+        from ui.theme_roles import color
+        pen = QPen(color("overlayAccent", 40), 1, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
 
         pr = self._page_rect
