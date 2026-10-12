@@ -13,8 +13,8 @@ if "--verify-window-geometry" in sys.argv:
     parser = argparse.ArgumentParser(description="Isolated native window geometry verification")
     parser.add_argument("--verify-window-geometry", required=True)
     args = parser.parse_args()
-    from ui.geometry_check import run_geometry_check
-    raise SystemExit(run_geometry_check(args.verify_window_geometry, APP_VERSION))
+    from ui.geometry_check import run_geometry_cli
+    raise SystemExit(run_geometry_cli(args.verify_window_geometry, APP_VERSION))
 
 # OpenDesk 整合命令必須在載入 Qt 前執行，才能用於快速健康檢查與無介面 LIVE 驗證。
 from core.integration_bridge import dispatch_integration_cli

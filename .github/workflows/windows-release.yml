@@ -47,6 +47,10 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python -c "import subprocess,sys; sys.exit(subprocess.run([sys.executable, '-m', 'pytest', '-vv', '-o', 'faulthandler_timeout=60'], timeout=180).returncode)"
 
+      - name: Verify native source widgets
+        shell: pwsh
+        run: python main.py --verify-window-geometry dist/source-window-geometry.json
+
       - name: Build Windows package
         shell: pwsh
         run: |
@@ -70,6 +74,19 @@ jobs:
             dist/AcroPDF_Setup.exe.sha256
             dist/windows-package-validation.json
           if-no-files-found: error
+
+      - name: Preserve native verification failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcroPDF-native-diagnostics
+          retention-days: 3
+          path: |
+            dist/source-window-geometry.json
+            dist/failed-window-geometry.json
+            dist/failed-theme-screenshots/
+            dist/theme-screenshots/
+          if-no-files-found: ignore
 
       - name: Upload verified packages to draft release
         if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''

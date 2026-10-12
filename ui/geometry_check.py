@@ -10,6 +10,20 @@ import tempfile
 from pathlib import Path
 
 
+def run_geometry_cli(report_path, version):
+    """Windowed EXEs have no stderr; return errors as JSON, without a popup."""
+    try:
+        return run_geometry_check(report_path, version)
+    except Exception as error:
+        import traceback
+        target = Path(report_path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(dict(passed=False, version=version,
+                                         error=str(error), traceback=traceback.format_exc()),
+                                    ensure_ascii=False, indent=2), encoding="utf-8")
+        return 1
+
+
 def run_geometry_check(report_path, version):
     import os
     import fitz
@@ -23,6 +37,9 @@ def run_geometry_check(report_path, version):
 
     target = Path(report_path).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
+    def phase(name):
+        target.write_text(json.dumps(dict(passed=False, version=version, phase=name)), encoding="utf-8")
+    phase("create-native-window")
     with tempfile.TemporaryDirectory(prefix="acropdf_geometry_") as folder:
         scratch = Path(folder)
         os.environ["ACROPDF_RECOVERY_DIR"] = str(scratch / "recovery")
@@ -41,6 +58,7 @@ def run_geometry_check(report_path, version):
         window.show()
         QTest.qWait(100)
         try:
+            phase("small-control-icons")
             icon_requests = 0
             for standard_icon in MacSafeWidgetStyle._glyphs:
                 image = app.style().standardIcon(standard_icon)
@@ -59,6 +77,7 @@ def run_geometry_check(report_path, version):
                     window.open_file(str(sample))
                     window.open_file(str(second))
                 for theme in ("light", "dark"):
+                    phase(f"window-geometry-{theme}-{'documents' if documents else 'welcome'}")
                     window._switch_theme(theme)
                     for n, (width, height) in enumerate(shapes * 4):
                         window.resize(width, height)
@@ -84,6 +103,7 @@ def run_geometry_check(report_path, version):
             assert hashlib.sha256(second.read_bytes()).hexdigest() == digest
             assert window._current_view()._page_widgets
             from ui.theme_check import verify_theme_controls
+            phase("theme-controls")
             theme_controls = verify_theme_controls(app, target.parent / "theme-screenshots")
             report = dict(passed=True, version=version, platform=app.platformName(),
                           os=platform.platform(), qt=QT_VERSION_STR,

@@ -10,6 +10,19 @@ from ui.widget_style import MacSafeWidgetStyle, install_widget_style
 from ui.main_window import MainWindow
 
 
+def test_windowed_geometry_cli_returns_failure_report_without_error_popup(tmp_path, monkeypatch):
+    import json
+    import ui.geometry_check as checker
+    def fail(*args):
+        raise AssertionError("unreadable button")
+    monkeypatch.setattr(checker, "run_geometry_check", fail)
+    report = tmp_path / "geometry.json"
+    assert checker.run_geometry_cli(report, "1.1.5") == 1
+    result = json.loads(report.read_text())
+    assert not result["passed"] and result["error"] == "unreadable button"
+    assert "AssertionError" in result["traceback"]
+
+
 @pytest.mark.parametrize("standard_icon", list(MacSafeWidgetStyle._glyphs))
 def test_small_control_icons_use_pixmaps_at_transient_geometry(qapp, standard_icon):
     style = MacSafeWidgetStyle(QStyleFactory.create("Fusion"))

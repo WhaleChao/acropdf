@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -129,10 +130,19 @@ def main():
         assert hashlib.sha256(sample.read_bytes()).hexdigest() == original
         report["source_pdf_unchanged"] = True
         geometry_report = scratch / "window-geometry.json"
-        subprocess.run(
-            [str(installed_exe), "--verify-window-geometry", str(geometry_report)],
-            env=env, check=True, timeout=90,
-        )
+        try:
+            subprocess.run(
+                [str(installed_exe), "--verify-window-geometry", str(geometry_report)],
+                env=env, check=True, timeout=90,
+            )
+        except Exception:
+            if geometry_report.exists():
+                print(geometry_report.read_text(encoding="utf-8"))
+                shutil.copy2(geometry_report, DIST / "failed-window-geometry.json")
+            screenshots = scratch / "theme-screenshots"
+            if screenshots.exists():
+                shutil.copytree(screenshots, DIST / "failed-theme-screenshots", dirs_exist_ok=True)
+            raise
         geometry = json.loads(geometry_report.read_text(encoding="utf-8"))
         assert geometry["passed"] and geometry["version"] == version
         assert geometry["platform"] == "windows"
