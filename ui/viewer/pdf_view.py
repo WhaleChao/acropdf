@@ -366,7 +366,11 @@ class PDFView(QScrollArea):
         bg = QColor(hex_color)
         for widget in (self.viewport(), self._container):
             # A local background survives Qt's palette reset when a view is reparented into a tab.
-            widget.setStyleSheet(f"background-color: {hex_color};")
+            # Unscoped local QSS also styles descendants, including modal
+            # annotation dialogs parented to a page. Restrict the canvas
+            # override so it cannot replace their input/button backgrounds.
+            widget.setStyleSheet(
+                f"QWidget#{widget.objectName()} {{ background-color: {hex_color}; }}")
             widget.ensurePolished()
             widget.setAutoFillBackground(True)
             pal = widget.palette()

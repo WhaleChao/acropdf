@@ -58,7 +58,7 @@ def test_main_status_cli_does_not_start_qt():
     )
     value = json.loads(result.stdout)
     assert value["ok"] is True
-    assert value["app_version"] == "1.1.5"
+    assert value["app_version"] == "1.1.6"
 
 
 def test_windowed_exe_contract_writes_utf8_report_without_stdout(tmp_path, monkeypatch):

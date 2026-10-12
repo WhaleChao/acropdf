@@ -19,6 +19,23 @@ def test_sticky_note_buttons_paint_readable_colors_across_live_themes(qapp):
     assert result["minimum_contrast"] >= 4.5
 
 
+def test_production_page_parented_sticky_note_can_retheme_and_save(qapp, sample_pdf):
+    from ui.main_window import MainWindow
+    from ui.theme_check import verify_sticky_note_flow
+    window = MainWindow()
+    window.show()
+    window.open_file(str(sample_pdf))
+    qapp.processEvents()
+    try:
+        result = verify_sticky_note_flow(qapp, window)
+        assert result["button_states"] == 16
+        assert result["minimum_contrast"] >= 4.5
+        assert result["annotations_saved"] == 2
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
 def test_native_hover_fallback_still_rejects_wrong_foreground(qapp):
     from PyQt6.QtWidgets import QPushButton
     from ui.theme_check import check_button

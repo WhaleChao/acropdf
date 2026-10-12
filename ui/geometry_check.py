@@ -102,16 +102,19 @@ def run_geometry_check(report_path, version):
             assert hashlib.sha256(sample.read_bytes()).hexdigest() == digest
             assert hashlib.sha256(second.read_bytes()).hexdigest() == digest
             assert window._current_view()._page_widgets
-            from ui.theme_check import verify_theme_controls
+            from ui.theme_check import verify_theme_controls, verify_sticky_note_flow
             phase("theme-controls")
             theme_controls = verify_theme_controls(app, target.parent / "theme-screenshots")
+            phase("production-sticky-note")
+            sticky_note_flow = verify_sticky_note_flow(app, window, target.parent / "theme-screenshots")
             report = dict(passed=True, version=version, platform=app.platformName(),
                           os=platform.platform(), qt=QT_VERSION_STR,
                           geometry_changes=geometry_changes, icon_requests=icon_requests,
                           overflow_visible=True, source_pdf_unchanged=True,
                           document_tabs=2, themes=["light", "dark"],
                           maximize_restore=True, minimize_restore=True,
-                          user_settings_isolated=True, theme_controls=theme_controls)
+                          user_settings_isolated=True, theme_controls=theme_controls,
+                          sticky_note_flow=sticky_note_flow)
             target.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         finally:
             QThreadPool.globalInstance().waitForDone(10000)
