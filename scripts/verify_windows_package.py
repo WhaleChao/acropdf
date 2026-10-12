@@ -128,12 +128,21 @@ def main():
             process.wait(timeout=30)
         assert hashlib.sha256(sample.read_bytes()).hexdigest() == original
         report["source_pdf_unchanged"] = True
+        geometry_report = scratch / "window-geometry.json"
+        subprocess.run(
+            [str(installed_exe), "--verify-window-geometry", str(geometry_report)],
+            env=env, check=True, timeout=90,
+        )
+        geometry = json.loads(geometry_report.read_text(encoding="utf-8"))
+        assert geometry["passed"] and geometry["version"] == version
+        assert geometry["platform"] == "windows"
+        report["native_window_geometry"] = geometry
         uninstall = installed / "unins000.exe"
         subprocess.run([str(uninstall), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], check=True, timeout=90)
         assert not installed_exe.exists()
         report["silent_install_uninstall_passed"] = True
     report["passed"] = True
-    report["limitations"] = ["No Authenticode certificate", "GUI startup smoke test only; physical printer and assistive technology require device testing"]
+    report["limitations"] = ["No Authenticode certificate", "Physical printer and assistive technology require device testing"]
     (DIST / "windows-package-validation.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"version": version, "passed": True, "checksums": report["checksums"]}))
 

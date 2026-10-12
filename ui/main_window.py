@@ -168,6 +168,8 @@ class AcrobatToolsPanel(QScrollArea):
 
 class MainWindow(QMainWindow):
     def __init__(self):
+        from ui.widget_style import install_widget_style
+        install_widget_style(QApplication.instance())
         super().__init__()
         self.setWindowTitle(
             "OpenDesk TW — PDF 工作區"

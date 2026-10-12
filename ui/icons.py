@@ -55,6 +55,14 @@ def icon(name, color="#14665e", size=20):
         path.lineTo(16,12); path.lineTo(16,8); path.cubicTo(16,5,19,5,19,8)
         path.lineTo(19,15); path.cubicTo(19,24,11,23,7,20); path.lineTo(3,15)
         path.cubicTo(1,12,4,10,7,13); p.drawPath(path)
+    elif name == "close":
+        line(7, 7, 17, 17); line(7, 17, 17, 7)
+    elif name == "overflow-horizontal":
+        for x in (5, 13):
+            line(x, 6, x + 6, 12); line(x + 6, 12, x, 18)
+    elif name == "overflow-vertical":
+        for y in (5, 13):
+            line(6, y, 12, y + 6); line(12, y + 6, 18, y)
     elif name == "arrow":
         line(4,12,20,12); line(14,6,20,12); line(20,12,14,18)
     else:

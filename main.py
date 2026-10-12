@@ -5,8 +5,16 @@ import json
 from pathlib import Path
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.1.4"
+APP_VERSION = "1.1.5"
 APP_PUBLISHER = "WhaleChao"
+
+if "--verify-window-geometry" in sys.argv:
+    import argparse
+    parser = argparse.ArgumentParser(description="Isolated native window geometry verification")
+    parser.add_argument("--verify-window-geometry", required=True)
+    args = parser.parse_args()
+    from ui.geometry_check import run_geometry_check
+    raise SystemExit(run_geometry_check(args.verify_window_geometry, APP_VERSION))
 
 # OpenDesk 整合命令必須在載入 Qt 前執行，才能用於快速健康檢查與無介面 LIVE 驗證。
 from core.integration_bridge import dispatch_integration_cli
@@ -110,6 +118,8 @@ def main():
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_PUBLISHER)
     app.setApplicationVersion(APP_VERSION)
+    from ui.widget_style import install_widget_style
+    install_widget_style(app)
 
     # 載入 Qt 繁體中文翻譯（列印對話框等原生 UI 元件）
     app._translators = []  # 保留參照，避免 QTranslator 被 GC 後翻譯失效
