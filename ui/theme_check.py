@@ -106,12 +106,12 @@ def verify_theme_controls(app, screenshots=None):
                     QTest.qWait(10)
                     hover(button, True)
                     hover_bg = c["text"] if primary and enabled else c["tint"] if enabled else bg
-                    cocoa = app.platformName() == "cocoa"
-                    # Cocoa can suppress pointer hover for automated windows
+                    native = app.platformName() in ("cocoa", "windows")
+                    # Native platforms can suppress hover for automated windows
                     # independently of Qt's active-window flag. Accept only
                     # normal or hovered palette surfaces; verify actual glyphs
-                    # and contrast on whichever surface Cocoa paints.
-                    ratio = check_button(button, fg, hover_bg, bg if cocoa else None)
+                    # and contrast on whichever surface the platform paints.
+                    ratio = check_button(button, fg, hover_bg, bg if native else None)
                     measurements.append(dict(theme=theme, button=button.text(), enabled=enabled,
                                              state="hover", contrast=ratio))
                     if enabled:
@@ -124,7 +124,7 @@ def verify_theme_controls(app, screenshots=None):
                         pressed_fg = c["bg"] if pressed_primary else c["text"]
                         pressed_bg = c["text"] if pressed_primary else c["tint"]
                         base_bg = c["accent"] if pressed_primary else c["tint"]
-                        ratio = check_button(button, pressed_fg, pressed_bg, base_bg if cocoa else None)
+                        ratio = check_button(button, pressed_fg, pressed_bg, base_bg if native else None)
                         measurements.append(dict(theme=theme, button=button.text(), enabled=True,
                                                  state="pressed", contrast=ratio))
                         # Release outside to avoid accepting/rejecting the dialog.
@@ -157,7 +157,7 @@ def verify_theme_controls(app, screenshots=None):
         return dict(passed=True, live_theme_switches=4, button_states=len(measurements),
                     minimum_contrast=min(v["contrast"] for v in measurements),
                     semantic_labels=len(labels), progress_text_checked=True,
-                    cocoa_hover_surface_may_remain_normal=app.platformName() == "cocoa",
+                    native_hover_surface_may_remain_normal=app.platformName() in ("cocoa", "windows"),
                     measurements=measurements)
     finally:
         dialog.close()

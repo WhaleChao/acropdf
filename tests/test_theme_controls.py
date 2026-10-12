@@ -19,6 +19,23 @@ def test_sticky_note_buttons_paint_readable_colors_across_live_themes(qapp):
     assert result["minimum_contrast"] >= 4.5
 
 
+def test_native_hover_fallback_still_rejects_wrong_foreground(qapp):
+    from PyQt6.QtWidgets import QPushButton
+    from ui.theme_check import check_button
+    theme_manager().set_mode("light")
+    button = QPushButton("Readable")
+    button.setDefault(True)
+    button.show()
+    qapp.processEvents()
+    c = COLORS["light"]
+    try:
+        assert check_button(button, c["bg"], c["text"], c["accent"]) >= 4.5
+        with pytest.raises(AssertionError, match="foreground"):
+            check_button(button, "#123456", c["text"], c["accent"])
+    finally:
+        button.close()
+
+
 def test_cached_warning_and_error_items_follow_live_theme(qapp):
     table = QTableWidget(1, 1)
     cell = QTableWidgetItem("low confidence")
