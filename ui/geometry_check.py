@@ -107,6 +107,9 @@ def run_geometry_check(report_path, version):
             theme_controls = verify_theme_controls(app, target.parent / "theme-screenshots")
             phase("production-sticky-note")
             sticky_note_flow = verify_sticky_note_flow(app, window, target.parent / "theme-screenshots")
+            from ui.print_check import verify_print_orientation
+            phase("print-orientation")
+            print_orientation = verify_print_orientation(app, target.parent / "print-check")
             report = dict(passed=True, version=version, platform=app.platformName(),
                           os=platform.platform(), qt=QT_VERSION_STR,
                           geometry_changes=geometry_changes, icon_requests=icon_requests,
@@ -114,7 +117,7 @@ def run_geometry_check(report_path, version):
                           document_tabs=2, themes=["light", "dark"],
                           maximize_restore=True, minimize_restore=True,
                           user_settings_isolated=True, theme_controls=theme_controls,
-                          sticky_note_flow=sticky_note_flow)
+                          sticky_note_flow=sticky_note_flow, print_orientation=print_orientation)
             target.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         finally:
             QThreadPool.globalInstance().waitForDone(10000)

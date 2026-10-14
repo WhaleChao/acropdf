@@ -263,14 +263,32 @@ class AnnotSummaryDialog(QDialog):
         settings = dlg.settings()
         printer.setCopyCount(settings.copies)
         printer.setDuplex(settings.duplex_mode)
-        if settings.output_pdf_path:
-            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-            printer.setOutputFileName(settings.output_pdf_path)
-        else:
-            printer.setPrinterName(settings.printer_name)
-        # Print on paper with the export palette, regardless of screen theme.
-        report = QTextDocument()
-        report.setHtml(_to_html(self._entries, "light"))
-        report.print(printer)
+        from core.print_engine import configure_print_layout
+        from core.file_io import atomic_output
+        try:
+            # The summary used to discard the paper/direction selected in the
+            # shared print dialog. Apply the same validated layout as PDFs.
+            report = QTextDocument()
+            report.setHtml(_to_html(self._entries, "light"))
+            if settings.output_pdf_path:
+                with atomic_output(settings.output_pdf_path,
+                                   source=getattr(self._doc, "source_path", None),
+                                   overwrite=settings.overwrite) as temporary:
+                    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                    printer.setOutputFileName(str(temporary))
+                    configure_print_layout(printer, settings.paper_size, settings.landscape)
+                    report.print(printer)
+                    with fitz.open(temporary) as check:
+                        if not len(check):
+                            raise ValueError("列印副本沒有頁面。")
+            else:
+                printer.setPrinterName(settings.printer_name)
+                configure_print_layout(printer, settings.paper_size, settings.landscape)
+                report.print(printer)
+            if printer.printerState() == QPrinter.PrinterState.Error:
+                raise RuntimeError("印表機未能完成列印。")
+        except Exception as exc:
+            QMessageBox.warning(self, "列印未完成", str(exc))
+            return
         if settings.output_pdf_path:
             QMessageBox.information(self, "列印完成", f"PDF 已輸出至：\n{settings.output_pdf_path}")

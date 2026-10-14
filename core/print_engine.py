@@ -55,6 +55,11 @@ class PrintEngine:
                     selected.insert_pdf(original, from_page=number, to_page=number)
                 prepare_print_appearances(selected)
                 selected.bake(annots=True, widgets=True)
+                # show_pdf_page imports the unrotated content stream. Normalize
+                # /Rotate on the private copy so its content and fitting rect
+                # describe the same displayed page; otherwise 90/270 pages clip.
+                for page in selected:
+                    page.remove_rotation()
                 total = len(selected) * copies
                 for copy in range(copies):
                     for number in range(len(selected)):
@@ -86,6 +91,24 @@ def render_scale(page_rect, printer_dpi, max_pixels=24_000_000, max_edge=16384):
     pixel_scale = (math.sqrt((width+height)**2 + area*(max_pixels-4)) - (width+height)) / area
     return min(max(1, min(printer_dpi, 300)) / 72,
                pixel_scale, (max_edge-2) / max(width, height))
+
+
+def configure_print_layout(printer, paper_size, landscape):
+    """Apply paper and direction together, rejecting unsupported driver results."""
+    from PyQt6.QtCore import QSizeF
+    from PyQt6.QtGui import QPageLayout, QPageSize
+    width, height = paper_size
+    if not all(math.isfinite(n) and n > 0 for n in (width, height)):
+        raise ValueError('紙張尺寸必須有效。')
+    orientation = QPageLayout.Orientation.Landscape if landscape else QPageLayout.Orientation.Portrait
+    current = printer.pageLayout()
+    layout = QPageLayout(QPageSize(QSizeF(width, height), QPageSize.Unit.Point),
+                         orientation, current.margins(QPageLayout.Unit.Point), QPageLayout.Unit.Point)
+    if not printer.setPageLayout(layout) or printer.pageLayout().orientation() != orientation:
+        raise ValueError('印表機不接受所選紙張與列印方向，請更換紙張或印表機。')
+    actual = printer.pageLayout().fullRectPoints()
+    if (actual.width() > actual.height()) != bool(landscape) and width != height:
+        raise ValueError('印表機回傳的紙張方向不符，已停止列印。')
 
 
 def print_to_device(doc, printer, page_indices, interrupted=None, progress=None, password=None):

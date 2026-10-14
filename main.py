@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 APP_NAME = "AcroPDF"
-APP_VERSION = "1.1.6"
+APP_VERSION = "1.1.7"
 APP_PUBLISHER = "WhaleChao"
 
 if "--verify-window-geometry" in sys.argv:

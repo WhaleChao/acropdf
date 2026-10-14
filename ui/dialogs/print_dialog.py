@@ -40,11 +40,13 @@ class PrintSettings:
 class PrintDialog(QDialog):
     """AcroPDF 內建繁中列印對話框，避免系統面板語言退回英文。"""
 
-    def __init__(self, page_count: int, current_page: int, parent=None, show_page_range: bool = True):
+    def __init__(self, page_count: int, current_page: int, parent=None, show_page_range: bool = True,
+                 page_size: tuple[float, float] | None = None):
         super().__init__(parent)
         self._page_count = max(0, page_count)
         self._current_page = min(max(current_page, 0), max(self._page_count - 1, 0))
         self._show_page_range = show_page_range
+        self._initial_landscape = bool(page_size and page_size[0] > page_size[1])
         self._settings: PrintSettings | None = None
 
         self.setWindowTitle("列印")
@@ -101,6 +103,24 @@ class PrintDialog(QDialog):
         printer_form.addRow("輸出：", pdf_row)
         root.addWidget(printer_group)
 
+        # Keep paper and orientation visible before the longer range/duplex
+        # controls. Start from the displayed PDF page, including its rotation.
+        paper_group = QGroupBox("紙張與方向")
+        paper_form = QFormLayout(paper_group)
+        self._paper_combo = QComboBox()
+        self._paper_combo.addItem("A4（210 × 297 mm）", (595.276, 841.89))
+        self._paper_combo.addItem("A3（297 × 420 mm）", (841.89, 1190.551))
+        self._paper_combo.addItem("Letter（8.5 × 11 in）", (612., 792.))
+        self._paper_combo.addItem("Legal（8.5 × 14 in）", (612., 1008.))
+        self._orientation = QComboBox()
+        self._orientation.addItem("直式（縱向）", False)
+        self._orientation.addItem("橫式（橫向）", True)
+        self._orientation.setCurrentIndex(int(self._initial_landscape))
+        self._orientation.setAccessibleName("列印方向")
+        paper_form.addRow("紙張：", self._paper_combo)
+        paper_form.addRow("方向：", self._orientation)
+        root.addWidget(paper_group)
+
         if self._show_page_range:
             page_group = QGroupBox("頁面")
             page_layout = QVBoxLayout(page_group)
@@ -145,18 +165,6 @@ class PrintDialog(QDialog):
         duplex_form.addRow("列印方式：", self._duplex_combo)
         root.addWidget(duplex_group)
 
-        paper_group = QGroupBox("紙張與方向")
-        paper_form = QFormLayout(paper_group)
-        self._paper_combo = QComboBox()
-        self._paper_combo.addItem("A4（210 × 297 mm）", (595.276, 841.89))
-        self._paper_combo.addItem("A3（297 × 420 mm）", (841.89, 1190.551))
-        self._paper_combo.addItem("Letter（8.5 × 11 in）", (612., 792.))
-        self._paper_combo.addItem("Legal（8.5 × 14 in）", (612., 1008.))
-        self._orientation = QComboBox()
-        self._orientation.addItems(["直向", "橫向"])
-        paper_form.addRow("紙張：", self._paper_combo)
-        paper_form.addRow("方向：", self._orientation)
-        root.addWidget(paper_group)
         notice = QLabel("頁面會依比例置中；PDF 列印副本保留向量內容，註解與表單會攤平。副本不保留原檔加密及數位簽章。")
         notice.setWordWrap(True)
         root.addWidget(notice)
@@ -218,7 +226,7 @@ class PrintDialog(QDialog):
             duplex_mode=self._duplex_combo.currentData() or QPrinter.DuplexMode.DuplexLongSide,
             output_pdf_path=output_pdf or None,
             paper_size=self._paper_combo.currentData(),
-            landscape=self._orientation.currentIndex() == 1,
+            landscape=bool(self._orientation.currentData()),
             overwrite=overwrite,
         )
         self.accept()

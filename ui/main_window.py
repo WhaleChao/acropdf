@@ -1508,7 +1508,9 @@ class MainWindow(QMainWindow):
 
         view = self._current_view()
         current_page = view.current_page() if view else 0
-        dialog = PrintDialog(doc.page_count, current_page, self)
+        page_rect = doc.fitz_doc[current_page].rect
+        dialog = PrintDialog(doc.page_count, current_page, self,
+                             page_size=(page_rect.width, page_rect.height))
         if dialog.exec() != PrintDialog.DialogCode.Accepted:
             return
         settings = dialog.settings()
@@ -1527,17 +1529,18 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "列印完成", f"PDF 已輸出至：\n{settings.output_pdf_path}")
             return
 
-        from PyQt6.QtGui import QPageSize, QPageLayout
-        from PyQt6.QtCore import QSizeF
         from PyQt6.QtWidgets import QProgressDialog
-        from core.print_engine import print_to_device, prepare_print_appearances
+        from core.print_engine import print_to_device, prepare_print_appearances, configure_print_layout
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         printer.setPrinterName(settings.printer_name)
         printer.setDocName(doc.display_name)
         printer.setCopyCount(settings.copies)
         printer.setDuplex(settings.duplex_mode)
-        printer.setPageSize(QPageSize(QSizeF(*settings.paper_size), QPageSize.Unit.Point))
-        printer.setPageOrientation(QPageLayout.Orientation.Landscape if settings.landscape else QPageLayout.Orientation.Portrait)
+        try:
+            configure_print_layout(printer, settings.paper_size, settings.landscape)
+        except ValueError as exc:
+            QMessageBox.warning(self, "列印未完成", str(exc))
+            return
         progress = QProgressDialog("正在準備列印…", "取消", 0, len(settings.page_indices), self)
         progress.setWindowModality(Qt.WindowModality.ApplicationModal)
         progress.setMinimumDuration(0)
