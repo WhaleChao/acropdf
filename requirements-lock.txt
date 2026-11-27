@@ -1,5 +1,6 @@
 # Reproducible direct dependencies verified on macOS arm64 / Python 3.14.
 PyQt6==6.11.0
+PyQt6-Qt6==6.11.2; sys_platform == "darwin"
 PyMuPDF==1.27.1
 pymupdf-fonts==1.0.5
 pikepdf==10.5.1

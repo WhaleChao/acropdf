@@ -1,4 +1,6 @@
 PyQt6>=6.6
+# QTBUG-147602: older macOS Qt runtimes can crash in QImage::toCGImage().
+PyQt6-Qt6>=6.11.2; sys_platform == "darwin"
 PyMuPDF>=1.27.1
 pymupdf-fonts
 pikepdf

@@ -63,6 +63,8 @@ PACKAGES: list[Pkg] = [
     # ── 核心 ─────────────────────────────────────────────────────────
     Pkg("fitz",          "PyMuPDF",         min_ver="1.24"),
     Pkg("PyQt6",         "PyQt6",           min_ver="6.6"),
+    # Check the Qt runtime separately from the Python bindings (QTBUG-147602).
+    Pkg("PyQt6.QtCore",  "PyQt6-Qt6",       min_ver="6.11.2", mac_only=True),
     Pkg("PyQt6.sip",     "PyQt6-sip",       optional=True),
     Pkg("pymupdf_fonts", "pymupdf-fonts"),
 

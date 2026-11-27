@@ -4,6 +4,30 @@ from pathlib import Path
 import pytest
 
 import build_mac
+import build_preflight
+
+
+@pytest.mark.parametrize("installed,upgrade_ok,expected", [
+    ("6.11.0", True, True),
+    ("6.11.1", False, False),
+    ("6.11.2", False, True),
+])
+def test_preflight_requires_fixed_macos_qt_runtime(monkeypatch, installed, upgrade_ok, expected):
+    runtime = next(pkg for pkg in build_preflight.PACKAGES if pkg.pip_name == "PyQt6-Qt6")
+    monkeypatch.setattr(build_preflight, "PACKAGES", [runtime])
+    monkeypatch.setattr(build_preflight, "_installed_ver", lambda name: installed)
+    installs = []
+
+    def install(name, minimum):
+        installs.append((name, minimum))
+        return upgrade_ok
+
+    monkeypatch.setattr(build_preflight, "_pip_install", install)
+    assert build_preflight._check_packages(is_mac=True, is_win=False) is expected
+    assert installs == ([("PyQt6-Qt6", "6.11.2")] if installed < "6.11.2" else [])
+    installs.clear()
+    assert build_preflight._check_packages(is_mac=False, is_win=True)
+    assert installs == []
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="macOS framework symlink staging")
